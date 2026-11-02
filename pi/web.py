@@ -36,6 +36,26 @@ MAX_UPLOAD = 20 * 1024 * 1024
 agent = Agent()
 agent_lock = threading.Lock()  # one conversation, one question at a time
 
+# Where replies are spoken: "pi" = the Pi's own speaker (e.g. a Bluetooth speaker paired to it),
+# "browser" = sent back to the laptop browser to play.
+SPEAK_ON = os.getenv("QUIETDESK_SPEAK_ON", "pi")
+speak_lock = threading.Lock()  # so two replies never talk over each other
+
+
+def _speak_on_pi(text: str) -> None:
+    with speak_lock:
+        subprocess.run(["espeak-ng", "-v", "en-us", "-s", "160", text])
+
+
+def say(text: str) -> str:
+    """Speak a reply. Returns base64 WAV for the browser, or "" when the Pi speaks it itself."""
+    if not text or not shutil.which("espeak-ng"):
+        return ""
+    if SPEAK_ON == "pi":
+        threading.Thread(target=_speak_on_pi, args=(text,), daemon=True).start()
+        return ""
+    return speech_wav(text)
+
 
 def speech_wav(text: str) -> str:
     """Make the spoken reply with espeak-ng (built-in Linux voice, not an AI model). Returns base64 WAV."""
@@ -54,7 +74,7 @@ def ask_agent(text: str) -> dict:
     with agent_lock:
         reply = agent.ask(text)
         used = list(agent.tool_log)
-    return {"reply": reply, "tools": used, "audio": speech_wav(reply)}
+    return {"reply": reply, "tools": used, "audio": say(reply)}
 
 
 def state() -> dict:
@@ -104,7 +124,7 @@ class Handler(BaseHTTPRequestHandler):
                     os.unlink(wav)
                 if not heard:
                     msg = "Sorry, I didn't catch that."
-                    return self._json({"heard": "", "reply": msg, "tools": [], "audio": speech_wav(msg)})
+                    return self._json({"heard": "", "reply": msg, "tools": [], "audio": say(msg)})
                 return self._json({"heard": heard, **ask_agent(heard)})
 
             data = json.loads(self._body() or b"{}")
@@ -120,7 +140,7 @@ class Handler(BaseHTTPRequestHandler):
                 nid = tools.add_notification(app, sender, text, **result)
                 audio = ""
                 if result["urgency"] == "urgent":
-                    audio = speech_wav(f"Urgent message from {sender} on {app}. {text}")
+                    audio = say(f"Urgent message from {sender} on {app}. {text}")
                 return self._json({"id": nid, **result, "audio": audio})
 
             if self.path == "/api/reset":  # clean slate between demo takes
