@@ -155,10 +155,10 @@ async function api(path, body, isWav) {
   return data;
 }
 
-function addMsg(who, text, tools) {
+function addMsg(who, text, tools, mood) {
   const div = document.createElement("div");
   div.className = "msg " + (who === "You" ? "you" : "bot");
-  div.innerHTML = `<div class="who">${esc(who)}</div>${esc(text)}` +
+  div.innerHTML = `<div class="who">${esc(who)}${mood ? ` · voice: ${esc(mood)}` : ""}</div>${esc(text)}` +
     (tools && tools.length ? "<div>" + tools.map((t) =>
       `<span class="tool">${esc(t.name)}(${esc(JSON.stringify(t.args))})</span>`).join("") + "</div>" : "");
   $("#log").appendChild(div);
@@ -171,7 +171,7 @@ async function ask(text) {
   statusEl.textContent = "Muse Spark is thinking…";
   try {
     const r = await api("/api/ask", { text });
-    addMsg("QuietDesk", r.reply, r.tools);
+    addMsg("QuietDesk", r.reply, r.tools, r.mood);
     play(r.audio);
     statusEl.textContent = "Ready";
   } catch (e) { statusEl.textContent = "Error: " + e.message; }
@@ -234,7 +234,7 @@ async function stopRec() {
   try {
     const r = await api("/api/voice", wav, true);
     if (r.heard) addMsg("You (voice)", r.heard);
-    addMsg("QuietDesk", r.reply, r.tools);
+    addMsg("QuietDesk", r.reply, r.tools, r.mood);
     play(r.audio);
     statusEl.textContent = "Ready";
   } catch (e) { statusEl.textContent = "Error: " + e.message; }

@@ -13,7 +13,6 @@ import base64
 import json
 import os
 import re
-import shutil
 import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -42,27 +41,30 @@ SPEAK_ON = os.getenv("QUIETDESK_SPEAK_ON", "pi")
 speak_lock = threading.Lock()  # so two replies never talk over each other
 
 
-def _speak_on_pi(text: str) -> None:
+def _speak_on_pi(text: str, ding: bool, mood: str) -> None:
     with speak_lock:
-        tts.play(text)
+        if ding:
+            tts.chime()
+        tts.play(text, mood)
 
 
-def say(text: str) -> str:
-    """Speak a reply (Meta MMS-TTS, espeak-ng as backup).
+def say(text: str, ding: bool = False, mood: str = "neutral") -> str:
+    """Speak a reply (Meta MMS-TTS in the given mood, espeak-ng as backup), with an optional chime.
     Returns base64 WAV for the browser, or "" when the Pi speaks it itself."""
     if not text:
         return ""
     if SPEAK_ON == "pi":
-        threading.Thread(target=_speak_on_pi, args=(text,), daemon=True).start()
+        threading.Thread(target=_speak_on_pi, args=(text, ding, mood), daemon=True).start()
         return ""
-    return base64.b64encode(tts.wav_bytes(text)).decode()
+    return base64.b64encode(tts.wav_bytes(text, mood)).decode()
 
 
 def ask_agent(text: str) -> dict:
     with agent_lock:
         reply = agent.ask(text)
         used = list(agent.tool_log)
-    return {"reply": reply, "tools": used, "audio": say(reply)}
+        mood = agent.mood
+    return {"reply": reply, "mood": mood, "tools": used, "audio": say(reply, mood=mood)}
 
 
 def state() -> dict:
@@ -70,7 +72,7 @@ def state() -> dict:
         "notifications": tools.all_notifications(),
         "notes": tools.list_notes(5)["notes"],
         "reminders": tools.list_reminders()["reminders"],
-        "voice": tts.USE_MMS or bool(shutil.which("espeak-ng")),
+        "voice": True,
     }
 
 
@@ -128,7 +130,7 @@ class Handler(BaseHTTPRequestHandler):
                 nid = tools.add_notification(app, sender, text, **result)
                 audio = ""
                 if result["urgency"] == "urgent":
-                    audio = say(f"Urgent message from {sender} on {app}. {text}")
+                    audio = say(f"Urgent message from {sender} on {app}.", ding=True, mood="serious")
                 return self._json({"id": nid, **result, "audio": audio})
 
             if self.path == "/api/reset":  # clean slate between demo takes

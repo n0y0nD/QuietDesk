@@ -58,12 +58,12 @@ def transcribe(wav_path: str) -> str:
     return json.loads(result.stdout).get("transcript", "").strip()
 
 
-def speak(text: str) -> None:
+def speak(text: str, mood: str = "neutral") -> None:
     """Say the reply with Meta MMS-TTS on the Pi (espeak-ng as backup)."""
     print(f"QuietDesk: {text}")
     import tts  # loaded here so web.py can import transcribe() without loading the voice model twice
 
-    tts.play(text)
+    tts.play(text, mood)
 
 
 def start_recording(wav_path: str) -> subprocess.Popen:
@@ -85,7 +85,8 @@ def handle_audio(agent: Agent, wav_path: str) -> None:
         speak("Sorry, I didn't catch that.")
         return
     print(f"You said: {text}")
-    speak(agent.ask(text))
+    reply = agent.ask(text)
+    speak(reply, agent.mood)
 
 
 def loop_keyboard(agent: Agent) -> None:

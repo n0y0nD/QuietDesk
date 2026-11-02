@@ -13,7 +13,8 @@ Every AI model in QuietDesk is a Meta model. The project calls no other AI model
 | Agent brain: answers, notes, reminders, reply drafts (tool calling) | Meta Model API (Responses API) | `muse-spark-1.3` |
 | Deciding which phone notifications are urgent, writing digests | Meta Model API (Responses API) | `muse-spark-1.3` |
 | Speech-to-text (push-to-talk voice input) | Meta Model API (Muse Voice Transcribe) | `muse-voice-transcribe-1.0` |
-| Text-to-speech (QuietDesk's voice) | On the Raspberry Pi, open-source | Meta MMS-TTS, `facebook/mms-tts-eng` |
+| Picking the mood of each spoken reply (happy, calm, serious, neutral) | Meta Model API (Responses API) | `muse-spark-1.3` |
+| Text-to-speech (QuietDesk's voice), tone set by that mood | On the Raspberry Pi, open-source | Meta MMS-TTS, `facebook/mms-tts-eng` |
 
 ## OS and system features (not AI models)
 
