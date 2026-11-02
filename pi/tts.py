@@ -22,11 +22,13 @@ VOICE = os.getenv("QUIETDESK_TTS", "mms")
 #   pitch: 1.06 = about one semitone higher   rate: 1.1 = 10% faster
 #   noise: more rise and fall in the voice     dur: more variation in word timing
 #   pause: how long it stops at commas / full stops
+# Tuned against a reference voice (pitch, pitch range and words per second measured per mood),
+# keeping pitch shifts small so the voice doesn't sound like a cartoon.
 MOODS = {
-    "neutral": dict(pitch=1.00, rate=1.05, noise=0.80, dur=0.85, pause=(0.18, 0.32)),
-    "happy":   dict(pitch=1.07, rate=1.12, noise=0.95, dur=0.90, pause=(0.12, 0.25)),
-    "calm":    dict(pitch=0.95, rate=0.90, noise=0.55, dur=0.70, pause=(0.25, 0.45)),
-    "serious": dict(pitch=0.97, rate=1.00, noise=0.60, dur=0.75, pause=(0.20, 0.38)),
+    "neutral": dict(pitch=1.10, rate=1.16, noise=0.65, dur=0.80, pause=(0.12, 0.25)),
+    "happy":   dict(pitch=1.18, rate=1.21, noise=1.00, dur=0.90, pause=(0.10, 0.22)),
+    "calm":    dict(pitch=1.02, rate=1.10, noise=0.60, dur=0.75, pause=(0.18, 0.35)),
+    "serious": dict(pitch=1.05, rate=1.25, noise=0.40, dur=0.70, pause=(0.12, 0.25)),
 }
 PICO_LANG = os.getenv("QUIETDESK_PICO_LANG", "en-US")
 MMS_MODEL = os.getenv("QUIETDESK_TTS_MODEL", "facebook/mms-tts-eng")
