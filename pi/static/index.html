@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QuietDesk</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --line: #262b36; --text: #e8eaf0; --muted: #8a92a6;
+    --accent: #6ea8ff; --urgent: #ff6b6b; --digest: #8a92a6; --ok: #4ade80;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { padding: 18px 24px; border-bottom: 1px solid var(--line); display: flex;
+           align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 20px; letter-spacing: .3px; }
+  header .models { color: var(--muted); font-size: 13px; }
+  header .models b { color: var(--text); font-weight: 600; }
+  main { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px 24px; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; padding: 16px; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; min-width: 0; }
+  h2 { margin: 0 0 4px; font-size: 16px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+
+  .talk-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 0 16px; }
+  #talk { width: 132px; height: 132px; border-radius: 50%; border: 0; cursor: pointer;
+          background: #c0392b; color: #fff; font-weight: 700; font-size: 15px;
+          box-shadow: 0 0 0 6px #2a1414; transition: transform .08s, box-shadow .2s; user-select: none; touch-action: none; }
+  #talk.rec { transform: scale(.95); box-shadow: 0 0 0 12px rgba(255,107,107,.35); background: #e74c3c; }
+  #talk:disabled { background: #444; box-shadow: none; cursor: default; }
+  #status { color: var(--muted); font-size: 13px; min-height: 18px; }
+  .ask { display: flex; gap: 8px; margin-bottom: 8px; }
+  .ask input { flex: 1; min-width: 0; }
+  input, textarea { background: #0f1218; color: var(--text); border: 1px solid var(--line);
+                    border-radius: 8px; padding: 9px 10px; font: inherit; }
+  textarea { width: 100%; resize: vertical; min-height: 54px; }
+  button.btn { background: #232937; color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+               padding: 8px 12px; font: inherit; cursor: pointer; }
+  button.btn:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #0b1220; border-color: var(--accent); font-weight: 600; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .chips button { font-size: 13px; padding: 6px 10px; }
+
+  #log { display: flex; flex-direction: column; gap: 10px; max-height: 46vh; overflow-y: auto; }
+  .msg { padding: 10px 12px; border-radius: 10px; }
+  .msg.you { background: #1d2330; align-self: flex-end; max-width: 85%; }
+  .msg.bot { background: #142033; border: 1px solid #1f3352; max-width: 92%; }
+  .msg .who { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 2px; }
+  .tool { display: inline-block; font: 12px ui-monospace, Consolas, monospace; background: #0d1626;
+          color: #9cc3ff; border: 1px solid #22385a; border-radius: 6px; padding: 2px 6px; margin: 4px 4px 0 0; }
+
+  .presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .presets button { text-align: left; font-size: 13px; }
+  .presets small { display: block; color: var(--muted); }
+  form.custom { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+  form.custom input { min-width: 0; }
+  form.custom input[name=text] { grid-column: 1 / -1; }
+  form.custom button { grid-column: 1 / -1; }
+  #notifs { display: flex; flex-direction: column; gap: 10px; }
+  .card { border: 1px solid var(--line); border-left: 4px solid var(--digest); border-radius: 10px; padding: 12px; background: #12151c; }
+  .card.urgent { border-left-color: var(--urgent); }
+  .card.done { opacity: .55; }
+  .card .top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .card .from { font-weight: 600; }
+  .card .app { color: var(--muted); font-size: 12px; }
+  .badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; text-transform: uppercase; letter-spacing: .5px; }
+  .badge.urgent { background: rgba(255,107,107,.15); color: var(--urgent); }
+  .badge.digest { background: rgba(138,146,166,.15); color: var(--digest); }
+  .card .text { margin: 6px 0; }
+  .card .why { color: var(--muted); font-size: 13px; }
+  .card .actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .card .sent { color: var(--ok); font-size: 13px; margin-top: 6px; }
+  .empty { color: var(--muted); font-size: 13px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+  .row2 ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+  .busy { color: var(--accent); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>QuietDesk</h1>
+  <div class="models">AI by Meta: <b>Muse Spark 1.3</b> (agent + triage) · <b>Muse Voice Transcribe</b> (speech-to-text) · voice: espeak-ng (built-in, not AI)</div>
+</header>
+
+<main>
+  <section>
+    <h2>Desk</h2>
+    <div class="sub">Hold the red button (or the Space bar) and talk. Release to send.</div>
+    <div class="talk-wrap">
+      <button id="talk">HOLD<br>TO TALK</button>
+      <div id="status">Ready</div>
+    </div>
+    <form class="ask" id="askForm">
+      <input id="askText" placeholder="Or type a question…" autocomplete="off">
+      <button class="btn">Ask</button>
+    </form>
+    <div class="chips">
+      <button class="btn" data-q="What did I miss?">What did I miss?</button>
+      <button class="btn" data-q="Read my urgent notifications.">Urgent only</button>
+      <button class="btn" data-q="What are my reminders?">My reminders</button>
+    </div>
+    <div id="log"></div>
+    <div class="row2">
+      <div><b>Notes</b><ul id="notes"></ul></div>
+      <div><b>Reminders</b><ul id="reminders"></ul></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Phone (simulated)</h2>
+    <div class="sub">Stands in for the Android companion app. Each notification is sorted by Muse Spark. Nothing is sent until you approve it.</div>
+    <div class="presets" id="presets"></div>
+    <form class="custom" id="customForm">
+      <input name="app" placeholder="App (e.g. WhatsApp)">
+      <input name="sender" placeholder="From">
+      <input name="text" placeholder="Message text" required>
+      <button class="btn">Send custom notification</button>
+    </form>
+    <div style="text-align:right;margin:-6px 0 10px"><button class="btn" id="reset" style="font-size:12px">Clear notifications</button></div>
+    <div id="notifs"></div>
+  </section>
+</main>
+
+<script>
+const PRESETS = [
+  { app: "WhatsApp", sender: "Mom", text: "Beta, call me when you can. Papa ki tabiyat thodi kharab hai." },
+  { app: "Slack", sender: "Priya (Manager)", text: "Can you send me the demo link before 5 pm today?" },
+  { app: "SMS", sender: "Bank", text: "OTP for a transaction of Rs 24,999 is 482913. If this was not you, call us now." },
+  { app: "WhatsApp", sender: "College Gang", text: "bro who's coming for the movie on Sunday? 😂" },
+  { app: "Food app", sender: "Offers", text: "Flat 60% off on your next order! Offer ends tonight 🍕" },
+  { app: "Instagram", sender: "rahul_07", text: "rahul_07 liked your reel" },
+];
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const statusEl = $("#status");
+let player = null;
+
+function play(b64) {
+  if (!b64) return;
+  if (player) player.pause();
+  player = new Audio("data:audio/wav;base64," + b64);
+  player.play().catch(() => {});
+}
+
+async function api(path, body, isWav) {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": isWav ? "audio/wav" : "application/json" },
+    body: isWav ? body : JSON.stringify(body || {}),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function addMsg(who, text, tools) {
+  const div = document.createElement("div");
+  div.className = "msg " + (who === "You" ? "you" : "bot");
+  div.innerHTML = `<div class="who">${esc(who)}</div>${esc(text)}` +
+    (tools && tools.length ? "<div>" + tools.map((t) =>
+      `<span class="tool">${esc(t.name)}(${esc(JSON.stringify(t.args))})</span>`).join("") + "</div>" : "");
+  $("#log").appendChild(div);
+  $("#log").scrollTop = $("#log").scrollHeight;
+}
+
+async function ask(text) {
+  if (!text) return;
+  addMsg("You", text);
+  statusEl.textContent = "Muse Spark is thinking…";
+  try {
+    const r = await api("/api/ask", { text });
+    addMsg("QuietDesk", r.reply, r.tools);
+    play(r.audio);
+    statusEl.textContent = "Ready";
+  } catch (e) { statusEl.textContent = "Error: " + e.message; }
+  refresh();
+}
+
+// ---------- Recording: mic -> 16 kHz mono 16-bit WAV (what Muse Voice Transcribe expects) ----------
+let ctx, stream, source, proc, chunks = [], recording = false;
+
+async function startRec() {
+  if (recording) return;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+  } catch (e) { statusEl.textContent = "Mic blocked: " + e.message; return; }
+  ctx = new AudioContext();
+  source = ctx.createMediaStreamSource(stream);
+  proc = ctx.createScriptProcessor(4096, 1, 1);
+  chunks = [];
+  proc.onaudioprocess = (e) => chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+  source.connect(proc); proc.connect(ctx.destination);
+  recording = true;
+  $("#talk").classList.add("rec");
+  statusEl.textContent = "Listening… release to send";
+}
+
+function toWav16k(chunks, inRate) {
+  const total = chunks.reduce((n, c) => n + c.length, 0);
+  const input = new Float32Array(total);
+  let o = 0; for (const c of chunks) { input.set(c, o); o += c.length; }
+  const ratio = inRate / 16000, outLen = Math.floor(total / ratio);
+  const pcm = new Int16Array(outLen);
+  for (let i = 0; i < outLen; i++) {           // average each block = simple low-pass + downsample
+    const start = Math.floor(i * ratio), end = Math.min(total, Math.floor((i + 1) * ratio));
+    let sum = 0; for (let j = start; j < end; j++) sum += input[j];
+    const v = Math.max(-1, Math.min(1, sum / Math.max(1, end - start)));
+    pcm[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
+  }
+  const buf = new ArrayBuffer(44 + pcm.length * 2), dv = new DataView(buf);
+  const str = (off, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(off + i, s.charCodeAt(i)); };
+  str(0, "RIFF"); dv.setUint32(4, 36 + pcm.length * 2, true); str(8, "WAVE");
+  str(12, "fmt "); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+  dv.setUint32(24, 16000, true); dv.setUint32(28, 32000, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+  str(36, "data"); dv.setUint32(40, pcm.length * 2, true);
+  new Int16Array(buf, 44).set(pcm);
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+async function stopRec() {
+  if (!recording) return;
+  recording = false;
+  $("#talk").classList.remove("rec");
+  source.disconnect(); proc.disconnect();
+  stream.getTracks().forEach((t) => t.stop());
+  const rate = ctx.sampleRate; await ctx.close();
+  const seconds = chunks.reduce((n, c) => n + c.length, 0) / rate;
+  if (seconds < 0.4) { statusEl.textContent = "Too short, hold the button while you talk."; return; }
+  const wav = toWav16k(chunks, rate);
+  $("#talk").disabled = true;
+  statusEl.textContent = "Muse Voice Transcribe → Muse Spark…";
+  try {
+    const r = await api("/api/voice", wav, true);
+    if (r.heard) addMsg("You (voice)", r.heard);
+    addMsg("QuietDesk", r.reply, r.tools);
+    play(r.audio);
+    statusEl.textContent = "Ready";
+  } catch (e) { statusEl.textContent = "Error: " + e.message; }
+  $("#talk").disabled = false;
+  refresh();
+}
+
+const talk = $("#talk");
+talk.addEventListener("pointerdown", (e) => { e.preventDefault(); startRec(); });
+talk.addEventListener("pointerup", stopRec);
+talk.addEventListener("pointerleave", stopRec);
+document.addEventListener("keydown", (e) => {
+  if (e.code === "Space" && !e.repeat && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); startRec(); }
+});
+document.addEventListener("keyup", (e) => { if (e.code === "Space" && recording) { e.preventDefault(); stopRec(); } });
+
+$("#askForm").addEventListener("submit", (e) => { e.preventDefault(); const t = $("#askText").value.trim(); $("#askText").value = ""; ask(t); });
+document.querySelectorAll(".chips button").forEach((b) => b.addEventListener("click", () => ask(b.dataset.q)));
+
+// ---------- Simulated phone ----------
+async function notify(n) {
+  const busy = document.createElement("div");
+  busy.className = "busy"; busy.textContent = `Muse Spark is sorting "${n.sender}"…`;
+  $("#notifs").prepend(busy);
+  try {
+    const r = await api("/api/notify", n);
+    play(r.audio);  // urgent ones are read out loud right away
+  } catch (e) { alert("Error: " + e.message); }
+  busy.remove();
+  refresh();
+}
+
+$("#presets").innerHTML = PRESETS.map((p, i) =>
+  `<button class="btn" data-i="${i}">${esc(p.sender)}<small>${esc(p.app)}</small></button>`).join("");
+$("#presets").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) notify(PRESETS[b.dataset.i]); });
+$("#customForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  notify({ app: f.get("app"), sender: f.get("sender"), text: f.get("text") });
+  e.target.reset();
+});
+
+$("#reset").addEventListener("click", async () => {
+  if (!confirm("Clear all notifications and start a fresh conversation?")) return;
+  await api("/api/reset");
+  $("#log").innerHTML = "";
+  refresh();
+});
+
+async function act(id, action) {
+  const text = action === "send" ? document.getElementById("draft-" + id).value.trim() : "";
+  if (action === "send" && !text) { alert("The reply is empty."); return; }
+  await api(`/api/notifications/${id}/${action}`, { text });
+  refresh();
+}
+
+function renderNotifs(list) {
+  const el = $("#notifs");
+  const busy = [...el.querySelectorAll(".busy")];
+  if (!list.length) { el.innerHTML = '<div class="empty">No notifications yet. Tap a sender above.</div>'; busy.forEach((b) => el.prepend(b)); return; }
+  const open = {};
+  el.querySelectorAll("textarea").forEach((t) => (open[t.id] = t.value));  // keep what the user is typing
+  el.innerHTML = list.map((n) => {
+    const done = n.status !== "new";
+    const draftId = "draft-" + n.id;
+    return `<div class="card ${n.urgency} ${done ? "done" : ""}">
+      <div class="top"><div><span class="from">${esc(n.sender)}</span> <span class="app">· ${esc(n.app)} · ${esc((n.received || "").slice(11))}</span></div>
+      <span class="badge ${n.urgency}">${esc(n.urgency)}</span></div>
+      <div class="text">${esc(n.text)}</div>
+      <div class="why">Muse Spark: ${esc(n.reason)}</div>
+      ${n.status === "sent" ? `<div class="sent">✓ Reply approved and sent: "${esc(n.reply)}"</div>` :
+        n.status === "dismissed" ? `<div class="why">Dismissed</div>` : `
+        <div style="margin-top:8px"><textarea id="${draftId}" placeholder="No reply drafted. Type one, or ask QuietDesk to draft it.">${esc(open[draftId] ?? n.draft ?? "")}</textarea></div>
+        <div class="actions">
+          <button class="btn primary" onclick="act(${n.id}, 'send')">Approve &amp; send</button>
+          <button class="btn" onclick="act(${n.id}, 'dismiss')">Dismiss</button>
+        </div>`}
+    </div>`;
+  }).join("");
+  busy.forEach((b) => el.prepend(b));
+}
+
+async function refresh() {
+  try {
+    const s = await (await fetch("/api/state")).json();
+    renderNotifs(s.notifications);
+    $("#notes").innerHTML = s.notes.map((n) => `<li>${esc(n.text)}</li>`).join("") || "<li>None</li>";
+    $("#reminders").innerHTML = s.reminders.map((r) => `<li>${esc(r.text)} — ${esc(r.due.replace("T", " "))}</li>`).join("") || "<li>None</li>";
+    if (!s.voice) statusEl.textContent = "Ready (espeak-ng not installed on the Pi, replies are text only)";
+  } catch (e) { statusEl.textContent = "Can't reach the Pi: " + e.message; }
+}
+refresh();
+</script>
+</body>
+</html>

@@ -23,7 +23,10 @@ def instructions() -> str:
         "You are QuietDesk, a calm voice assistant on a desk device that helps the user "
         "stay focused while their phone is out of reach. Replies are spoken aloud, so keep "
         "them short (1-3 sentences), no markdown or lists. Use the tools to save notes and "
-        "create or read reminders. Reply in the user's language (English or Hinglish). "
+        "create or read reminders, read missed phone notifications, and draft replies. "
+        "You can never send a message yourself: drafts wait on the screen until the user "
+        "approves them, so say the draft is ready for review. "
+        "Reply in the user's language (English or Hinglish). "
         f"Current local time: {now}."
     )
 
@@ -33,6 +36,7 @@ class Agent:
         self.last_response_id = None  # lets the API remember the conversation
 
     def ask(self, user_text: str) -> str:
+        self.tool_log = []  # tool calls made for this question, shown on the web page
         resp = client.responses.create(
             model=MODEL,
             instructions=instructions(),
@@ -49,6 +53,7 @@ class Agent:
                 args = json.loads(call.arguments or "{}")
                 result = run_tool(call.name, args)
                 print(f"  [tool] {call.name}({args}) -> {result}")
+                self.tool_log.append({"name": call.name, "args": args})
                 outputs.append(
                     {"type": "function_call_output", "call_id": call.call_id, "output": json.dumps(result)}
                 )

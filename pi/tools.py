@@ -13,7 +13,67 @@ def _db():
         "CREATE TABLE IF NOT EXISTS reminders "
         "(id INTEGER PRIMARY KEY, text TEXT, due TEXT, done INTEGER DEFAULT 0)"
     )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS notifications ("
+        "id INTEGER PRIMARY KEY, app TEXT, sender TEXT, text TEXT, received TEXT, "
+        "urgency TEXT, reason TEXT, draft TEXT, status TEXT DEFAULT 'new', reply TEXT)"
+    )
     return conn
+
+
+# ---- Phone notifications (relayed by the phone, sorted by Muse Spark) ----
+
+NOTIF_COLS = ["id", "app", "sender", "text", "received", "urgency", "reason", "draft", "status", "reply"]
+
+
+def add_notification(app: str, sender: str, text: str, urgency: str, reason: str, draft: str) -> int:
+    with _db() as conn:
+        cur = conn.execute(
+            "INSERT INTO notifications (app, sender, text, received, urgency, reason, draft) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (app, sender, text, datetime.now().isoformat(timespec="minutes"), urgency, reason, draft),
+        )
+    return cur.lastrowid
+
+
+def all_notifications() -> list:
+    with _db() as conn:
+        rows = conn.execute(f"SELECT {', '.join(NOTIF_COLS)} FROM notifications ORDER BY id DESC").fetchall()
+    return [dict(zip(NOTIF_COLS, r)) for r in rows]
+
+
+def set_notification_status(notification_id: int, status: str, reply: str = None) -> None:
+    with _db() as conn:
+        conn.execute(
+            "UPDATE notifications SET status = ?, reply = COALESCE(?, reply) WHERE id = ?",
+            (status, reply, notification_id),
+        )
+
+
+def clear_notifications() -> None:
+    with _db() as conn:
+        conn.execute("DELETE FROM notifications")
+
+
+def get_missed_notifications(urgency: str = "all") -> dict:
+    """Notifications the user has not handled yet. urgency: urgent, digest or all."""
+    items = [n for n in all_notifications() if n["status"] == "new"]
+    if urgency in ("urgent", "digest"):
+        items = [n for n in items if n["urgency"] == urgency]
+    return {
+        "notifications": [
+            {k: n[k] for k in ("id", "app", "sender", "text", "received", "urgency", "draft")} for n in items
+        ]
+    }
+
+
+def draft_reply(notification_id: int, text: str) -> dict:
+    """Save a reply draft. It is NOT sent: the user must approve it on the screen."""
+    with _db() as conn:
+        cur = conn.execute("UPDATE notifications SET draft = ? WHERE id = ?", (text, notification_id))
+    if cur.rowcount == 0:
+        return {"ok": False, "error": f"no notification with id {notification_id}"}
+    return {"ok": True, "status": "draft saved, waiting for the user to approve and send it"}
 
 
 def save_note(text: str) -> dict:
@@ -92,6 +152,32 @@ TOOL_SPECS = [
         "description": "Get the user's upcoming reminders.",
         "parameters": {"type": "object", "properties": {}},
     },
+    {
+        "type": "function",
+        "name": "get_missed_notifications",
+        "description": "Get phone notifications the user has not handled yet, already sorted into "
+        "urgent or digest. Use it when the user asks what they missed or for their digest.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "urgency": {"type": "string", "enum": ["urgent", "digest", "all"], "description": "Default all"}
+            },
+        },
+    },
+    {
+        "type": "function",
+        "name": "draft_reply",
+        "description": "Write or change the reply draft for a notification. This never sends anything: "
+        "the user reviews the draft on the screen and approves it before it is sent.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "notification_id": {"type": "integer"},
+                "text": {"type": "string", "description": "The reply text"},
+            },
+            "required": ["notification_id", "text"],
+        },
+    },
 ]
 
 TOOL_FUNCTIONS = {
@@ -99,6 +185,8 @@ TOOL_FUNCTIONS = {
     "list_notes": list_notes,
     "create_reminder": create_reminder,
     "list_reminders": list_reminders,
+    "get_missed_notifications": get_missed_notifications,
+    "draft_reply": draft_reply,
 }
 
 
