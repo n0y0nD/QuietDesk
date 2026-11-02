@@ -14,7 +14,6 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -25,6 +24,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).with_name(".env"))
 
 import tools  # noqa: E402
+import tts  # noqa: E402
 from agent import Agent  # noqa: E402
 from triage import classify  # noqa: E402
 from voice import transcribe  # noqa: E402
@@ -44,30 +44,18 @@ speak_lock = threading.Lock()  # so two replies never talk over each other
 
 def _speak_on_pi(text: str) -> None:
     with speak_lock:
-        subprocess.run(["espeak-ng", "-v", "en-us", "-s", "160", text])
+        tts.play(text)
 
 
 def say(text: str) -> str:
-    """Speak a reply. Returns base64 WAV for the browser, or "" when the Pi speaks it itself."""
-    if not text or not shutil.which("espeak-ng"):
+    """Speak a reply (Meta MMS-TTS, espeak-ng as backup).
+    Returns base64 WAV for the browser, or "" when the Pi speaks it itself."""
+    if not text:
         return ""
     if SPEAK_ON == "pi":
         threading.Thread(target=_speak_on_pi, args=(text,), daemon=True).start()
         return ""
-    return speech_wav(text)
-
-
-def speech_wav(text: str) -> str:
-    """Make the spoken reply with espeak-ng (built-in Linux voice, not an AI model). Returns base64 WAV."""
-    if not text or not shutil.which("espeak-ng"):
-        return ""
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-        path = f.name
-    try:
-        subprocess.run(["espeak-ng", "-v", "en-us", "-s", "165", "-w", path, text], check=True)
-        return base64.b64encode(Path(path).read_bytes()).decode()
-    finally:
-        os.unlink(path)
+    return base64.b64encode(tts.wav_bytes(text)).decode()
 
 
 def ask_agent(text: str) -> dict:
@@ -82,7 +70,7 @@ def state() -> dict:
         "notifications": tools.all_notifications(),
         "notes": tools.list_notes(5)["notes"],
         "reminders": tools.list_reminders()["reminders"],
-        "voice": bool(shutil.which("espeak-ng")),
+        "voice": tts.USE_MMS or bool(shutil.which("espeak-ng")),
     }
 
 
@@ -169,4 +157,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     print(f"QuietDesk web console on http://localhost:{PORT} (open it through the SSH tunnel)")
+    tts.warm_up()
     ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()

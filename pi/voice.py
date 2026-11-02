@@ -10,7 +10,6 @@ Run:
 import argparse
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -60,12 +59,11 @@ def transcribe(wav_path: str) -> str:
 
 
 def speak(text: str) -> None:
-    """Say the reply with espeak-ng, the built-in Linux voice (not an AI model)."""
+    """Say the reply with Meta MMS-TTS on the Pi (espeak-ng as backup)."""
     print(f"QuietDesk: {text}")
-    if shutil.which("espeak-ng"):
-        subprocess.run(["espeak-ng", "-v", "en-us", "-s", "165", text])
-    else:
-        print("  (espeak-ng not installed, so the reply is only printed)")
+    import tts  # loaded here so web.py can import transcribe() without loading the voice model twice
+
+    tts.play(text)
 
 
 def start_recording(wav_path: str) -> subprocess.Popen:

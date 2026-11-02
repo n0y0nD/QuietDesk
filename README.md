@@ -6,28 +6,30 @@ Built for the **Meta Global AI Developer Hackathon 2026**.
 
 ## Meta AI models (every AI model call in QuietDesk)
 
-All AI in QuietDesk runs on the Meta Model API. The project calls no other AI model, local or cloud.
+Every AI model in QuietDesk is a Meta model. The project calls no other AI model, local or cloud.
 
-| Feature | Meta API | Model |
+| Feature | Where it runs | Meta model |
 |---|---|---|
-| Agent brain: answers, notes, reminders, reply drafts (tool calling) | Responses API | `muse-spark-1.3` |
-| Deciding which phone notifications are urgent, writing digests | Responses API | `muse-spark-1.3` |
-| Speech-to-text (push-to-talk voice input) | Muse Voice Transcribe | `muse-voice-transcribe-1.0` |
+| Agent brain: answers, notes, reminders, reply drafts (tool calling) | Meta Model API (Responses API) | `muse-spark-1.3` |
+| Deciding which phone notifications are urgent, writing digests | Meta Model API (Responses API) | `muse-spark-1.3` |
+| Speech-to-text (push-to-talk voice input) | Meta Model API (Muse Voice Transcribe) | `muse-voice-transcribe-1.0` |
+| Text-to-speech (QuietDesk's voice) | On the Raspberry Pi, open-source | Meta MMS-TTS, `facebook/mms-tts-eng` |
 
 ## OS and system features (not AI models)
 
 | Feature | What we use |
 |---|---|
-| Speaking replies aloud | `espeak-ng`, the built-in Linux system voice (rule-based, not an AI model) |
-| Recording and playing audio | ALSA on Raspberry Pi OS |
+| Backup voice if MMS-TTS is off or fails | `espeak-ng`, the built-in Linux system voice (rule-based, not an AI model) |
+| Recording and playing audio | ALSA / PipeWire on Raspberry Pi OS |
+| Speaker | Bluetooth speaker paired to the Pi (BlueZ) |
 | Push-to-talk button and status LED | GPIO via `gpiozero` |
-| E-ink screen | Waveshare driver over SPI |
+| Status screen | Waveshare 1.5" RGB OLED over SPI |
 | Notes and reminders storage | SQLite |
 | Reading phone notifications | Android `NotificationListenerService` (OS API, no AI in the app); a simulated phone on the web console for the demo |
-| Mic and speaker for the web console | The browser's own mic and audio playback (no AI) |
+| Mic for the web console | The browser's own mic (no AI) |
 | Calling the Meta Model API | `openai` Python SDK pointed at `https://api.meta.ai/v1` (client library only, no OpenAI models) |
 
-QuietDesk needs an internet connection, since all AI runs through the Meta Model API.
+QuietDesk needs an internet connection for Muse Spark and Muse Voice Transcribe. The MMS-TTS voice runs offline on the Pi.
 
 ## Project layout
 
@@ -44,6 +46,8 @@ On the Pi, once:
 cd ~/quietdesk
 cp .env.example .env        # then paste your MODEL_API_KEY into .env
 sudo apt install -y espeak-ng
+.venv/bin/pip install openai python-dotenv transformers numpy
+.venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu
 .venv/bin/python test_api.py
 ```
 
@@ -68,7 +72,8 @@ Other ways to run it on the Pi:
 |---|---|
 | `pi/agent.py` | Muse Spark agent with tool calling (notes, reminders, missed notifications, reply drafts) |
 | `pi/triage.py` | Muse Spark sorts each notification: urgent now or saved for the digest, plus a reply draft |
-| `pi/voice.py` | Push-to-talk: record → Muse Voice Transcribe → agent → espeak-ng |
+| `pi/voice.py` | Push-to-talk: record → Muse Voice Transcribe → agent → spoken reply |
+| `pi/tts.py` | QuietDesk's voice: Meta MMS-TTS on the Pi, espeak-ng as backup |
 | `pi/web.py` | Web console on the Pi; the page stands in for the phone app in the demo |
 | `pi/tools.py` | SQLite storage and the tool definitions |
 
@@ -76,4 +81,4 @@ The agent can draft replies but can never send them. Every reply waits on the sc
 
 ## Hardware
 
-Raspberry Pi 5, Waveshare 2.9" e-ink (SPI), MAX98357A I2S amp + speaker, USB mic, push button, status LED. See `QuietDesk_Components_List.pdf` for the full list and wiring pins.
+Raspberry Pi 5, Waveshare 1.5" RGB OLED (SPI), Bluetooth speaker (boAt Stone 350 Pro), push-to-talk button, two status LEDs. The laptop browser is the mic for now. `QuietDesk_Components_List.pdf` has the original parts list.
