@@ -165,4 +165,3 @@ Other ways to run it on the Pi:
 | Laptop | mic and speaker (desk window) |
 | Optional | Bluetooth speaker on the Pi |
 
-`QuietDesk_Components_List.pdf` has the original parts list.

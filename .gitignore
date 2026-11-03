@@ -5,3 +5,6 @@ __pycache__/
 web.log
 web.pid
 voice-samples/
+
+# Personal parts list (kept locally)
+QuietDesk_Components_List.pdf
