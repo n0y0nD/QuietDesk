@@ -35,6 +35,7 @@ MAX_UPLOAD = 20 * 1024 * 1024
 
 agent = Agent()
 agent_lock = threading.Lock()  # one conversation, one question at a time
+voice_lock = threading.Lock()  # one spoken question at a time
 
 # Where replies are spoken: "pi" = the Pi's own speaker (e.g. a Bluetooth speaker paired to it),
 # "browser" = sent back to the laptop browser to play.
@@ -151,22 +152,31 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             if self.path == "/api/voice":
-                hw.set_state("thinking")
-                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-                    f.write(self._body())
-                    wav = f.name
+                body = self._body()
+                # One spoken question at a time: a second one while QuietDesk is busy is turned away,
+                # so two open pages (or a double press) can never make two answers talk over each other.
+                if not voice_lock.acquire(blocking=False):
+                    return self._json({"error": "QuietDesk is still answering, try again in a moment."}, 429)
                 try:
-                    heard = transcribe(wav)
-                except Exception:
-                    hw.set_state("ready")
-                    raise
+                    hw.set_state("thinking")
+                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                        f.write(body)
+                        wav = f.name
+                    try:
+                        heard = transcribe(wav)
+                    except Exception:
+                        hw.set_state("ready")
+                        raise
+                    finally:
+                        os.unlink(wav)
+                    if not heard:
+                        msg = "Sorry, I didn't catch that."
+                        hw.set_reply(msg)
+                        hw.set_state("ready")
+                        return self._json({"heard": "", "reply": msg, "tools": [], "speech": say(msg)})
+                    return self._json({"heard": heard, **ask_agent(heard)})
                 finally:
-                    os.unlink(wav)
-                if not heard:
-                    msg = "Sorry, I didn't catch that."
-                    hw.set_reply(msg)
-                    return self._json({"heard": "", "reply": msg, "tools": [], "speech": say(msg)})
-                return self._json({"heard": heard, **ask_agent(heard)})
+                    voice_lock.release()
 
             data = json.loads(self._body() or b"{}")
 

@@ -196,11 +196,16 @@ function speakLocal(text, mood, me) {
   });
 }
 
+function stopSpeaking() {
+  speakId++;
+  if (player) { player.pause(); player = null; }
+  speechSynthesis.cancel();
+}
+
 async function speak(s) {
   if (!s || !s.count) return;
-  const me = ++speakId;
-  if (player) player.pause();
-  speechSynthesis.cancel();
+  stopSpeaking();
+  const me = speakId;
   if (s.ding) await chime();
   if ($("#voicePick").value !== "mms" && await speakLocal(s.text, s.mood, me)) return;
   const get = (i) => fetch(`/api/speech/${s.token}/${i}`).then((r) => (r.ok ? r.blob() : null)).catch(() => null);
@@ -253,6 +258,7 @@ let ctx, stream, source, proc, chunks = [], recording = false, starting = false,
 async function startRec() {
   if (recording || starting || $("#talk").disabled) return;
   starting = true; stopAsked = false;
+  stopSpeaking();  // you started talking: QuietDesk stops talking
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
   } catch (e) { statusEl.textContent = "Mic blocked: " + e.message; starting = false; return; }
@@ -332,6 +338,8 @@ document.addEventListener("keyup", (e) => { if (e.code === "Space" && recording)
 let deskHeld = false;
 setInterval(async () => {
   try {
+    // Only the tab you are looking at answers the desk button, so two open tabs never both record and talk.
+    if (document.visibilityState !== "visible") { deskHeld = false; return; }
     const h = await (await fetch("/api/hw")).json();
     if (!h.hardware) return;
     if (h.down && !deskHeld) { deskHeld = true; startRec(); }
