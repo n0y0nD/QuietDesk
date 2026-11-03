@@ -58,8 +58,7 @@ def instructions() -> str:
             "Once it is on, say you will let people know when they message (nobody has been told yet). "
         ) +
         "When asked how the day or focus went, use get_focus_stats and say it in hours and minutes. "
-        "Reply in the user's language (English or Hinglish), always in Latin letters, never in Devanagari, "
-        "because the voice can only read Latin letters (the user may be shown to you in Devanagari). "
+        "Always reply in English, even if a message or the user uses another language. "
         "Say times in 12-hour form like 4:30 PM. "
         f"Current local time: {now}. {focus_line()}"
     )
@@ -76,30 +75,10 @@ def focus_line() -> str:
 KEEP_TURNS = 6  # how many past questions (with their tool calls) QuietDesk remembers
 
 # Sending a message by voice needs a clear yes from the user, checked here in code (not left to the model).
-YES_EN = re.compile(r"\b(yes|yeah|yep|yup|haan?|haa|han|haanji|ha|ji|send|sent|bhej\w*|ok|okay|sure|go ahead|kar do|do it)\b", re.I)
-NO_EN = re.compile(r"\b(no|nope|nahi|nahin|nhi|mat|don'?t|cancel|wait|ruko|stop|change|badal\w*)\b", re.I)
-# Muse Voice Transcribe may write Hindi in Devanagari ("हाँ, भेज दो"). Short words need spaces around them,
-# so "हा" inside "कहाँ" is not read as a yes.
-_EDGE_L, _EDGE_R = r"(?:^|[\s,.!?।])", r"(?=$|[\s,.!?।])"
-YES_HI = re.compile(_EDGE_L + r"(हाँ|हां|हा|हाँजी|जी|ओके)" + _EDGE_R + r"|भेज|ठीक है|बता द|कर द")
-NO_HI = re.compile(r"नहीं|नही|रुको|रुकिए|बदल|" + _EDGE_L + r"(मत|ना)" + _EDGE_R)
-
-
-class _Either:
-    """Matches if either the English (Latin letters) or the Hindi (Devanagari) pattern matches."""
-
-    def __init__(self, *patterns):
-        self.patterns = patterns
-
-    def search(self, text):
-        return next((m for p in self.patterns if (m := p.search(text or ""))), None)
-
-
-YES = _Either(YES_EN, YES_HI)
-NO = _Either(NO_EN, NO_HI)
+YES = re.compile(r"\b(yes|yeah|yep|yup|sure|ok|okay|send( it)?|sent|go ahead|do it)\b", re.I)
+NO = re.compile(r"\b(no|nope|not|don'?t|cancel|wait|stop|change)\b", re.I)
 # Auto-replies go on only if the user's own words say yes or ask for them.
-ASKED_AUTO = _Either(YES_EN, YES_HI, re.compile(r"\b(busy|auto.?repl\w*|tell (them|people|everyone)|reply|bata\w*)\b", re.I),
-                     re.compile(r"बिज़ी|बिजी|व्यस्त|बता|रिप्लाई"))
+ASKED_AUTO = re.compile(YES.pattern[:-3] + r"|busy|auto.?repl\w*|tell (them|people|everyone)|reply)\b", re.I)
 
 
 class Agent:

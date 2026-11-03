@@ -40,7 +40,7 @@ def transcribe(wav_path: str) -> str:
         "model": ASR_MODEL,
         "mode": "PUSH_TO_TALK",
         "audioEncoding": "WAV",
-        "languageBias": ["English", "Hindi"],
+        "languageBias": ["English"],
         "keywords": ["QuietDesk", "Lumi"],
     }
     # The key goes in through stdin so it never shows up in the process list.

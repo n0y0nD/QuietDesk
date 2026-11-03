@@ -9,7 +9,7 @@ Built for the **Meta Global AI Developer Hackathon 2026**.
 - **Your real phone, sorted by Muse Spark.** WhatsApp, Instagram, Gmail and other messages arrive from your Android phone over Wi-Fi (KDE Connect). Muse Spark decides for each one: *urgent now* or *saved for the digest*, and drafts a reply.
 - **Push to talk.** Hold the button on the desk and ask: "What did I miss?", "Remind me to call Mom at 6", "Start a 45 minute focus session". Muse Voice Transcribe turns speech into text; Muse Spark answers with tools.
 - **Replies that need your yes.** Lumi reads a draft out loud and asks "Should I send it?". Only after you say yes does the reply go out from your phone (WhatsApp's own quick reply). Or edit and press "Approve & send" on the screen.
-- **Focus sessions.** A glowing ring on the desk screen counts down. Only urgent messages interrupt. Lumi tells people who message you that you're busy until a set time (one short auto-reply each, in their language, marked as an auto-reply): she asks first, or does it in every session if you switch that on. When the session ends, Lumi reads a digest and today's focus score.
+- **Focus sessions.** A glowing ring on the desk screen counts down. Only urgent messages interrupt. Lumi tells people who message you that you're busy until a set time (one short auto-reply each, marked as an auto-reply): she asks first, or does it in every session if you switch that on. When the session ends, Lumi reads a digest and today's focus score.
 - **A desk you can glance at.** An animated face with glowing eyes, the time, your next reminder, the logos of apps with unread messages, phone battery and weather. A red light breathes while messages wait (faster if urgent).
 - **Reminders that ring** at their time, with a chime and a card on the screen.
 
@@ -21,7 +21,7 @@ Every AI model in QuietDesk is a Meta model. The project calls no other AI model
 |---|---|---|
 | Agent brain "Lumi": answers, notes, reminders, focus sessions, reply drafts (tool calling) | Meta Model API (Responses API) | `muse-spark-1.3` |
 | Deciding which phone notifications are urgent, writing digests | Meta Model API (Responses API) | `muse-spark-1.3` |
-| Writing focus auto-replies ("busy until 5:30 PM") in each sender's language | Meta Model API (Responses API) | `muse-spark-1.3` |
+| Writing focus auto-replies ("busy until 5:30 PM") | Meta Model API (Responses API) | `muse-spark-1.3` |
 | Speech-to-text (push-to-talk voice input) | Meta Model API (Muse Voice Transcribe) | `muse-voice-transcribe-1.0` |
 | Picking the mood of each spoken reply (happy, calm, serious, neutral) | Meta Model API (Responses API) | `muse-spark-1.3` |
 | Text-to-speech option "Meta MMS-TTS (Pi)", tone set by that mood | On the Raspberry Pi, open-source | Meta MMS-TTS, `facebook/mms-tts-eng` |

@@ -13,8 +13,8 @@ TRIAGE_INSTRUCTIONS = (
     "asks for something right now or ASAP, or is clearly waiting on the user, it is 'urgent'. "
     "Everything else is 'digest': promotions, social "
     "media, group chat banter, newsletters, routine updates. "
-    "If a person is asking something and a reply makes sense, write a short, natural reply draft in the "
-    "same language and tone as the message, otherwise leave draft empty. Never invent facts or promises. "
+    "If a person is asking something and a reply makes sense, write a short, natural reply draft in "
+    "English, in the same tone as the message, otherwise leave draft empty. Never invent facts or promises. "
     'Respond with ONLY a JSON object: {"urgency": "urgent" or "digest", "reason": "<one short sentence>", '
     '"draft": "<reply or empty string>"}'
 )
@@ -32,8 +32,8 @@ def _parse(text: str) -> dict:
 
 
 BUSY_INSTRUCTIONS = (
-    "Write a short, friendly auto-reply (at most 20 words) to this message, in the same language and tone "
-    "as the message (English, Hindi or Hinglish). Say the user is in a focus session until {until} and will "
+    "Write a short, friendly auto-reply (at most 20 words) to this message, in English, matching its tone "
+    "(casual or formal). Say the user is in a focus session until {until} and will "
     "reply after that. Do not answer their question or promise anything else. "
     "End with exactly: (auto-reply from Lumi). Respond with only the reply text."
 )

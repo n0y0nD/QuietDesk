@@ -151,7 +151,7 @@ def handle_notification(app: str, sender: str, text: str, source: str = "demo",
 
 def auto_reply(nid: int, sender: str, text: str, reply_id: str, until: str) -> None:
     try:
-        msg = busy_reply(sender, text, until)  # written by Muse Spark in the sender's language
+        msg = busy_reply(sender, text, until)  # written by Muse Spark
         phone.reply(reply_id, msg)
         tools.save_auto_reply(nid, msg)
         print(f"  auto-reply to {sender}: {msg}")
