@@ -163,6 +163,6 @@ Other ways to run it on the Pi:
 | Red LED (messages waiting) | pin 16 (GPIO23) → 330 Ω → LED → GND |
 | Android phone | KDE Connect over the same Wi-Fi |
 | Laptop | mic and speaker (desk window) |
-| Optional | Bluetooth speaker on the Pi (we used a boAt Stone 350 Pro) |
+| Optional | Bluetooth speaker on the Pi |
 
 `QuietDesk_Components_List.pdf` has the original parts list.

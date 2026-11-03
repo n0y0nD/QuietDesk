@@ -524,7 +524,7 @@ if __name__ == "__main__":  # preview every screen as PNGs and one animated GIF
         ("alert-insta", {**base, "alert": {"app": "Instagram", "sender": "rahul_07", "urgent": False,
                                            "text": "rahul_07 liked your reel"}}),
         ("alert-urgent", {**base, "alert": {"app": "WhatsApp", "sender": "Mom", "urgent": True,
-                                            "text": "Beta, call me when you can. Papa ki tabiyat thodi kharab hai."}}),
+                                            "text": "Hey, call me when you can. Dad is not feeling well."}}),
         ("alert-reminder", {**base, "alert": {"kind": "reminder", "app": "Reminder", "sender": "Call Mom about the doctor visit",
                                               "text": "Now · 5:00 PM"}}),
         ("alert-focus", {**base, "alert": {"kind": "focus", "app": "Focus", "sender": "Focus done",
