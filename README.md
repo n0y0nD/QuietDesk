@@ -65,12 +65,20 @@ Real phone notifications (optional; without it the simulated phone still works):
 
 Only messaging apps are passed on (`QUIETDESK_PHONE_APPS` in `.env`, default WhatsApp, Messages, Telegram, Signal, Slack, Discord, Gmail, Instagram), and anything that looks like an OTP or password is never sent to the model. `QUIETDESK_PHONE=off` turns the phone link off.
 
+Start QuietDesk by itself when the Pi boots (systemd user service, no sudo):
+
+```bash
+./install-service.sh        # later restarts: ./start-web.sh, logs: web.log
+```
+
 Web console (voice + notifications). The laptop browser is the mic and speaker; all AI runs on the Pi. From the laptop, run `open-quietdesk.ps1`, or by hand:
 
 ```bash
 ssh admin@raspberrypi5.local "~/quietdesk/start-web.sh"
 ssh -N -L 8000:localhost:8000 admin@raspberrypi5.local    # then open http://localhost:8000
 ```
+
+Hands-free on the laptop: `start-desk.ps1` keeps the tunnel to the Pi open (and reconnects) and opens QuietDesk in a small Edge window in desk mode (`/?desk=1`), minimised. That window is QuietDesk's mic and speaker: press the button on the desk and talk, nothing to open. Run `install-desk-startup.ps1` once to start it at every Windows sign-in. The first time, click "Allow" for the microphone in that window.
 
 Other ways to run it on the Pi:
 

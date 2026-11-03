@@ -167,6 +167,7 @@ phone = Phone(phone_notification)
 
 # ---- Desk screen details and timers, checked once a second ----
 
+desk_window = {"seen": -10.0}  # last time the laptop's hidden desk window checked in
 desk_info = {}  # what the OLED shows besides the conversation: phone battery, weather, next reminder, focus
 hw.info = lambda: desk_info
 
@@ -280,12 +281,15 @@ class Handler(BaseHTTPRequestHandler):
         return self.rfile.read(length)
 
     def do_GET(self):
-        if self.path == "/":
+        if self.path.split("?")[0] == "/":  # "/" or "/?desk=1"
             self._send(200, INDEX.read_bytes(), "text/html; charset=utf-8")
         elif self.path == "/api/state":
             self._json(state())
-        elif self.path == "/api/hw":  # the page polls this to use the desk button as push-to-talk
-            self._json({"down": hw.button_down, "presses": hw.presses, "hardware": hw.ok, "events": event_seq})
+        elif self.path in ("/api/hw", "/api/hw?desk=1"):  # pages poll this to use the desk button as push-to-talk
+            if self.path.endswith("desk=1"):  # the hidden desk window on the laptop (start-desk.ps1)
+                desk_window["seen"] = time.monotonic()
+            self._json({"down": hw.button_down, "presses": hw.presses, "hardware": hw.ok, "events": event_seq,
+                        "desk_window": time.monotonic() - desk_window["seen"] < 2})
         elif m := re.fullmatch(r"/api/events\?after=(\d+)", self.path):
             after = int(m.group(1))
             with events_lock:

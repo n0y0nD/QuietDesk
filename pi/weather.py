@@ -42,8 +42,10 @@ def _loop():
                                         "current": "temperature_2m,weather_code,is_day"})
             c = _get(f"https://api.open-meteo.com/v1/forecast?{q}")["current"]
             _current = {"temp": round(c["temperature_2m"]), "code": int(c["weather_code"]), "day": bool(c["is_day"])}
-        except Exception as e:
+        except Exception as e:  # e.g. Wi-Fi not up yet right after boot: try again in a minute
             print(f"  weather: {e}")
+            time.sleep(60)
+            continue
         time.sleep(REFRESH_SECONDS)
 
 

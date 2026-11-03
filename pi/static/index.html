@@ -351,7 +351,7 @@ document.addEventListener("keyup", (e) => { if (e.code === "Space" && recording)
 
 // New notifications from the real phone: refresh the list and read urgent ones out loud.
 let lastEvent = null;
-async function newEvents(seq) {
+async function newEvents(seq, speakThem) {
   const first = lastEvent === null;
   const after = lastEvent ?? seq;
   lastEvent = seq;
@@ -359,19 +359,26 @@ async function newEvents(seq) {
   try {
     const r = await (await fetch(`/api/events?after=${after}`)).json();
     refresh();
-    for (const s of r.speech) if (!recording) await speak(s);
+    if (speakThem) for (const s of r.speech) if (!recording) await speak(s);
   } catch (e) { /* try again on the next event */ }
 }
+
+// Desk mode (?desk=1): the hidden window that starts with the laptop (start-desk.ps1). It is QuietDesk's
+// ears and voice: it answers the desk button and speaks alerts even while minimised.
+const DESK = new URLSearchParams(location.search).has("desk");
+if (DESK) document.title = "QuietDesk desk";
 
 // The red button on the desk is push-to-talk too: the page watches it and records with this laptop's mic.
 let deskHeld = false;
 setInterval(async () => {
   try {
-    // Only the tab you are looking at answers the desk button, so two open tabs never both record and talk.
-    if (document.visibilityState !== "visible") { deskHeld = false; return; }
-    const h = await (await fetch("/api/hw")).json();
-    if (h.events !== lastEvent) newEvents(h.events);
-    if (!h.hardware) return;
+    // Only one page answers the desk button, so two pages never both record and talk:
+    // the desk window if it is running, otherwise the tab you are looking at.
+    if (!DESK && document.visibilityState !== "visible") { deskHeld = false; return; }
+    const h = await (await fetch(DESK ? "/api/hw?desk=1" : "/api/hw")).json();
+    const mine = DESK || !h.desk_window;
+    if (h.events !== lastEvent) newEvents(h.events, mine);
+    if (!h.hardware || !mine) { deskHeld = false; return; }
     if (h.down && !deskHeld) { deskHeld = true; startRec(); }
     else if (!h.down && deskHeld) { deskHeld = false; stopRec(); }
   } catch (e) { /* Pi briefly unreachable; try again next tick */ }

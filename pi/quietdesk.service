@@ -1,0 +1,15 @@
+# QuietDesk as a systemd user service: starts when the Pi boots and restarts if it ever crashes.
+# Install with ./install-service.sh (no sudo needed; uses the admin user's own systemd).
+[Unit]
+Description=QuietDesk desk companion (web console, button, LEDs, OLED, phone link)
+
+[Service]
+WorkingDirectory=%h/quietdesk
+ExecStart=%h/quietdesk/.venv/bin/python -u web.py
+Restart=on-failure
+RestartSec=3
+StandardOutput=append:%h/quietdesk/web.log
+StandardError=append:%h/quietdesk/web.log
+
+[Install]
+WantedBy=default.target
