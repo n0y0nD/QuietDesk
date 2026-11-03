@@ -87,7 +87,7 @@
 </head>
 <body>
 <header>
-  <h1>QuietDesk</h1>
+  <h1>QuietDesk <span style="font-weight:400;color:var(--accent)">· Lumi</span></h1>
   <div class="models">AI by Meta: <b>Muse Spark 1.3</b> (agent, triage, voice mood) · <b>Muse Voice Transcribe</b> (speech-to-text) · <b>MMS-TTS</b> (optional voice)</div>
   <label class="models" style="margin-left:auto">Voice
     <select id="voicePick" style="background:#0f1218;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:4px 6px;font:inherit"></select>
@@ -112,6 +112,7 @@
       <button class="btn" data-q="What are my reminders?">My reminders</button>
       <button class="btn" data-q="Start a 25 minute focus session.">Focus 25 min</button>
       <button class="btn" data-q="Stop my focus session.">Stop focus</button>
+      <button class="btn" data-q="How did my focus go today?">Focus score</button>
     </div>
     <div id="focusLine" class="sub" style="margin:-6px 0 12px"></div>
     <div id="log"></div>
@@ -443,6 +444,7 @@ function renderNotifs(list) {
       <span class="badge ${n.urgency}">${esc(n.urgency)}</span></div>
       <div class="text">${esc(n.text)}</div>
       <div class="why">Muse Spark: ${esc(n.reason)}</div>
+      ${n.status === "new" && n.reply ? `<div class="sent" style="color:var(--muted)">↪ Lumi auto-replied: "${esc(n.reply)}"</div>` : ""}
       ${n.status === "sent" ? `<div class="sent">✓ Reply approved and ${real ? "sent from your phone" : "marked sent (simulated)"}: "${esc(n.reply)}"</div>` :
         n.status === "dismissed" ? `<div class="why">Dismissed</div>` : `
         <div style="margin-top:8px"><textarea id="${draftId}" data-draft="${esc(n.draft ?? "")}" placeholder="No reply drafted. Type one, or ask QuietDesk to draft it.">${esc(open[draftId] ?? n.draft ?? "")}</textarea></div>
@@ -474,8 +476,12 @@ async function refresh() {
       : "○ Phone not connected. Open KDE Connect on the phone, same Wi-Fi as the Pi.";
     $("#notes").innerHTML = s.notes.map((n) => `<li>${esc(n.text)}</li>`).join("") || "<li>None</li>";
     $("#reminders").innerHTML = s.reminders.map((r) => `<li>${esc(r.text)} — ${esc(when(r.due))}</li>`).join("") || "<li>None</li>";
-    $("#focusLine").textContent = s.focus?.active
-      ? `● Focus session on until ${s.focus.ends_at}. Only urgent messages interrupt.` : "";
+    const ft = s.focus_today || {};
+    const today = ft.minutes ? ` Today: ${ft.minutes >= 60 ? Math.floor(ft.minutes / 60) + "h " : ""}${ft.minutes % 60}m focused, ` +
+      `${ft.held_back} held back, ${ft.auto_replies} auto-replies.` : "";
+    $("#focusLine").textContent = (s.focus?.active
+      ? `● Focus session on until ${s.focus.ends_at}. Only urgent messages interrupt` +
+        (s.focus.auto_reply ? "; Lumi tells others you're busy." : ".") : "") + today;
     if (!s.voice) statusEl.textContent = "Ready (espeak-ng not installed on the Pi, replies are text only)";
   } catch (e) { statusEl.textContent = "Can't reach the Pi: " + e.message; }
 }

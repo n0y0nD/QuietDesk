@@ -10,8 +10,9 @@ Every AI model in QuietDesk is a Meta model. The project calls no other AI model
 
 | Feature | Where it runs | Meta model |
 |---|---|---|
-| Agent brain: answers, notes, reminders, reply drafts (tool calling) | Meta Model API (Responses API) | `muse-spark-1.3` |
+| Agent brain "Lumi": answers, notes, reminders, focus sessions, reply drafts (tool calling) | Meta Model API (Responses API) | `muse-spark-1.3` |
 | Deciding which phone notifications are urgent, writing digests | Meta Model API (Responses API) | `muse-spark-1.3` |
+| Writing focus auto-replies ("busy until 5:30 PM") in each sender's language | Meta Model API (Responses API) | `muse-spark-1.3` |
 | Speech-to-text (push-to-talk voice input) | Meta Model API (Muse Voice Transcribe) | `muse-voice-transcribe-1.0` |
 | Picking the mood of each spoken reply (happy, calm, serious, neutral) | Meta Model API (Responses API) | `muse-spark-1.3` |
 | Text-to-speech option "Meta MMS-TTS (Pi)", tone set by that mood | On the Raspberry Pi, open-source | Meta MMS-TTS, `facebook/mms-tts-eng` |
@@ -100,7 +101,7 @@ Other ways to run it on the Pi:
 | `pi/web.py` | Web console on the Pi: push-to-talk, the phone's notifications, approve and send |
 | `pi/tools.py` | SQLite storage and the tool definitions (notes, reminders, notifications, drafts, focus) |
 | `pi/hardware.py`, `pi/screen.py` | Button, LEDs, and the animated OLED face (idle, focus, listening, thinking, reply, alerts) |
-| `pi/focus.py` | Focus sessions: only urgent messages interrupt; Muse Spark reads a digest when the session ends |
+| `pi/focus.py` | Focus sessions: only urgent messages interrupt; optional auto-replies ("busy until 5:30 PM", written by Muse Spark in the sender's language, marked as an auto-reply, only after the user says yes); a digest and today's focus score when it ends |
 | `pi/weather.py` | Current weather for the desk screen (Open-Meteo) |
 
 Nothing is sent without the user's yes. A reply goes out in one of two ways:

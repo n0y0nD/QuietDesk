@@ -75,11 +75,28 @@ class Pen:
     def _s(self, box):
         return [v * SS for v in box]
 
-    def rrect(self, box, r, fill):
-        self.d.rounded_rectangle(self._s(box), radius=r * SS, fill=fill)
+    def rrect(self, box, r, fill=None, outline=None, width=1):
+        self.d.rounded_rectangle(self._s(box), radius=r * SS, fill=fill, outline=outline,
+                                 width=max(1, round(width * SS)))
 
     def ellipse(self, box, fill=None, outline=None, width=1):
-        self.d.ellipse(self._s(box), fill=fill, outline=outline, width=width * SS)
+        self.d.ellipse(self._s(box), fill=fill, outline=outline, width=max(1, round(width * SS)))
+
+    def gradient_rrect(self, box, r, colors):
+        """Rounded square filled with a diagonal gradient through `colors` (used for the Instagram badge)."""
+        x0, y0, x1, y1 = [round(v * SS) for v in box]
+        w, h = x1 - x0, y1 - y0
+        grad = Image.new("RGB", (w, h))
+        px = grad.load()
+        for yy in range(h):
+            for xx in range(w):
+                k = (xx / w * 0.5 + (1 - yy / h) * 0.5) * (len(colors) - 1)
+                i = min(int(k), len(colors) - 2)
+                f = k - i
+                px[xx, yy] = tuple(int(colors[i][c] * (1 - f) + colors[i + 1][c] * f) for c in range(3))
+        mask = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0, 0, w - 1, h - 1), radius=r * SS, fill=255)
+        self.big.paste(grad, (x0, y0), mask)
 
     def arc(self, box, start, end, fill, width):
         self.d.arc(self._s(box), start, end, fill=fill, width=int(width * SS))
@@ -225,6 +242,90 @@ def weather_icon(p, x, y, code, day):
                   AMBER)
 
 
+WHITE = (255, 255, 255)
+
+
+def app_icon(p, app, x, y, s=12):
+    """A small badge for the app a message came from, drawn from simple shapes in the app's colours."""
+    a = (app or "").lower()
+    cx, cy = x + s / 2, y + s / 2
+    k = s / 12  # everything below is designed at 12 px
+    if "whatsapp" in a:
+        p.ellipse((x, y, x + s, y + s), fill=(37, 211, 102))
+        p.ellipse((cx - 3.6 * k, cy - 3.6 * k, cx + 3.6 * k, cy + 3.6 * k), outline=WHITE, width=1.1 * k)
+        p.polygon([(cx - 3.4 * k, cy + 1.5 * k), (cx - 4.4 * k, cy + 4.6 * k), (cx - 1.2 * k, cy + 3.4 * k)], WHITE)
+    elif "instagram" in a:
+        p.gradient_rrect((x, y, x + s, y + s), 3.4 * k, [(254, 218, 117), (250, 126, 30), (214, 41, 118), (150, 47, 191), (79, 91, 213)])
+        p.rrect((x + 2.2 * k, y + 2.2 * k, x + s - 2.2 * k, y + s - 2.2 * k), 2.2 * k, outline=WHITE, width=1.1 * k)
+        p.ellipse((cx - 2.1 * k, cy - 2.1 * k, cx + 2.1 * k, cy + 2.1 * k), outline=WHITE, width=1.1 * k)
+        p.ellipse((x + s - 4.2 * k, y + 3.2 * k, x + s - 3.0 * k, y + 4.4 * k), fill=WHITE)
+    elif "gmail" in a:
+        p.rrect((x, y + 1.5 * k, x + s, y + s - 1.5 * k), 1.6 * k, fill=WHITE)
+        p.line([(x + 1.6 * k, y + s - 2.8 * k), (x + 1.6 * k, y + 3.4 * k), (cx, cy + 0.6 * k),
+                (x + s - 1.6 * k, y + 3.4 * k), (x + s - 1.6 * k, y + s - 2.8 * k)], (234, 67, 53), 1.4 * k)
+    elif "telegram" in a:
+        p.ellipse((x, y, x + s, y + s), fill=(42, 171, 238))
+        p.polygon([(cx - 3.8 * k, cy + 0.2 * k), (cx + 3.4 * k, cy - 3.2 * k), (cx + 1.8 * k, cy + 3.4 * k),
+                   (cx - 0.4 * k, cy + 1.4 * k)], WHITE)
+    elif "slack" in a:
+        for (dx, dy), c in zip(((0, 0), (1, 0), (0, 1), (1, 1)),
+                               ((54, 197, 240), (46, 182, 125), (224, 30, 90), (236, 178, 46))):
+            px, py = x + dx * 6.5 * k, y + dy * 6.5 * k
+            p.rrect((px, py, px + 5.5 * k, py + 5.5 * k), 1.6 * k, fill=c)
+    elif "discord" in a:
+        p.rrect((x, y + 1 * k, x + s, y + s - 1 * k), 3.5 * k, fill=(88, 101, 242))
+        for ex in (cx - 2.4 * k, cx + 2.4 * k):
+            p.ellipse((ex - 1.2 * k, cy - 1.0 * k, ex + 1.2 * k, cy + 1.4 * k), fill=WHITE)
+    elif "signal" in a:
+        p.ellipse((x, y, x + s, y + s), fill=(58, 118, 240))
+        p.ellipse((cx - 3.4 * k, cy - 3.4 * k, cx + 3.4 * k, cy + 3.4 * k), fill=WHITE)
+    elif "message" in a or "sms" in a:
+        p.rrect((x, y + 0.5 * k, x + s, y + s - 2.5 * k), 4 * k, fill=(66, 133, 244))
+        p.polygon([(x + 2.5 * k, y + s - 3.5 * k), (x + 1.5 * k, y + s), (x + 5.5 * k, y + s - 3 * k)], (66, 133, 244))
+    elif "reminder" in a:
+        p.ellipse((x, y, x + s, y + s), fill=AMBER)
+        p.line([(cx, cy - 3.2 * k), (cx, cy), (cx + 2.4 * k, cy + 1.4 * k)], BG, 1.3 * k)
+    elif "focus" in a:
+        p.ellipse((x, y, x + s, y + s), outline=VIOLET, width=1.6 * k)
+        p.ellipse((cx - 2 * k, cy - 2 * k, cx + 2 * k, cy + 2 * k), fill=VIOLET)
+    else:
+        p.ellipse((x, y, x + s, y + s), fill=(70, 76, 90))
+        f = font(max(7, round(8 * k)), "Bold")
+        letter = (app or "?")[:1].upper()
+        p.text((cx - p.length(letter, f) / 2, cy - 5 * k), letter, f, WHITE)
+
+
+def app_row(p, s, y, size=12, gap=7, most=5):
+    """Logos of apps with unread messages, centred; urgent ones get a soft red glow behind them."""
+    apps = s.get("apps") or []
+    if not apps:
+        return
+    shown = apps[:most]
+    extra = len(apps) - len(shown)
+    f = font(9, "Bold")
+    total = len(shown) * size + (len(shown) - 1) * gap + (gap + p.length(f"+{extra}", f) if extra else 0)
+    x = 64 - total / 2
+    urgent_spots = [x + i * (size + gap) for i, a in enumerate(shown) if a.get("urgent")]
+    if urgent_spots:
+        p.glow(lambda: [p.ellipse((ux - 1.5, y - 1.5, ux + size + 1.5, y + size + 1.5), outline=RED, width=1.4)
+                        for ux in urgent_spots], radius=3, strength=0.9)
+    for a in shown:
+        app_icon(p, a["app"], x, y, size)
+        x += size + gap
+    if extra:
+        p.text((x, y), f"+{extra}", f, MUTED)
+
+
+def splash(p, s, t):
+    """For the first seconds after start-up: Lumi opens her eyes and says hello."""
+    age = s.get("boot_age", 9)
+    opening = min(1.0, max(0.06, (age - 0.4) / 0.6))  # eyes open
+    eyes(p, 46, ACCENT, open_=opening, glow=0.7)
+    k = min(1.0, max(0.0, (age - 1.0) / 0.8))           # then the name fades in
+    p.center(76, "Lumi", font(24, "Light"), dim(TEXT, k))
+    p.center(104, "QuietDesk", font(9, "Bold"), dim(MUTED, k))
+
+
 def status_row(p, s):
     """Top row, kept quiet: phone battery on the left, weather on the right."""
     f = font(9, "SemiBold")
@@ -244,46 +345,34 @@ def status_row(p, s):
         weather_icon(p, x - 14, 3, w["code"], w.get("day", True))
 
 
-def counts(p, s, y):
-    """Tiny glowing dots for waiting messages: red = urgent, grey = later. Nothing when all is read."""
-    items = [(n, c) for n, c in ((s.get("urgent", 0), RED), (s.get("digest", 0), MUTED)) if n]
-    if not items:
-        return
-    f = font(9, "Bold")
-    widths = [8 + p.length(str(n), f) for n, _ in items]
-    x = 64 - (sum(widths) + 8 * (len(items) - 1)) / 2
-    dots = []
-    for (n, c), w in zip(items, widths):
-        dots.append((x, c))
-        p.text((x + 7, y), str(n), f, c)
-        x += w + 8
-    p.glow(lambda: [p.ellipse((dx, y + 4, dx + 4, y + 8), fill=c) for dx, c in dots], radius=3, strength=0.7)
-
-
 # ---- screens ----
 
 def idle(p, s, t):
     status_row(p, s)
     urgent = s.get("urgent")
     color = dim(RED, 0.75 + 0.25 * math.sin(t * math.pi)) if urgent else ACCENT
-    eyes(p, 40, color, open_=blink(t), dx=glance(t))
+    eyes(p, 37, color, open_=blink(t), dx=glance(t))
     now = s.get("now") or datetime.now()
     hm, ampm = clock(now)
     fb, fs = font(34, "Light"), font(10, "SemiBold")
     total = p.length(hm, fb) + 4 + p.length(ampm, fs)
     x = (W - total) / 2
-    p.text((x, 60), hm, fb, TEXT)
-    p.text((x + p.length(hm, fb) + 4, 83), ampm, fs, MUTED)
+    p.text((x, 56), hm, fb, TEXT)
+    p.text((x + p.length(hm, fb) + 4, 79), ampm, fs, MUTED)
     f = font(10, "Medium")
     r = s.get("next_reminder")
     if r:
         line = p.fit(f"{r['time']} · {r['text']}", f, W - 22)
         x = (W - p.length(line, f) - 8) / 2
-        p.glow(lambda: p.ellipse((x, 108, x + 4, 112), fill=AMBER), radius=3, strength=0.7)
-        p.text((x + 8, 103), line, f, MUTED)
+        p.glow(lambda: p.ellipse((x, 102, x + 4, 106), fill=AMBER), radius=3, strength=0.7)
+        p.text((x + 8, 97), line, f, MUTED)
     else:
-        p.center(103, now.strftime("%a, %-d %b"), f, MUTED)
-    counts(p, s, 116)
+        line = now.strftime("%a, %-d %b")
+        mins = s.get("focus_today") or 0
+        if mins:  # today's focus score next to the date
+            line += f"  ·  {mins // 60}h {mins % 60}m focus" if mins >= 60 else f"  ·  {mins}m focus"
+        p.center(97, line, f, MUTED)
+    app_row(p, s, 113)  # logos of apps with unread messages
 
 
 def focus_screen(p, s, t):
@@ -358,8 +447,8 @@ def alert(p, s, t):
     kind = a.get("kind", "message")
     app = a.get("app", "Phone")
     color = APP_COLOR.get(app.lower(), ACCENT)
-    p.glow(lambda: p.ellipse((7, 8, 12, 13), fill=color), radius=3, strength=0.8)
-    p.text((17, 4), app, font(10, "Bold"), color)
+    app_icon(p, app, 6, 4, 12)
+    p.text((23, 4), app, font(10, "Bold"), color)
     if a.get("urgent"):
         k = 0.6 + 0.4 * math.sin(t * 2 * math.pi)
         f = font(8, "ExtraBold")
@@ -392,7 +481,9 @@ def render(s: dict, t: float) -> Image.Image:
     focus, mood, reply, reply_age, show_reply, alert, now."""
     p = Pen()
     state = s.get("state", "ready")
-    if state == "listening":
+    if s.get("boot_age", 9) < 3.2 and state == "ready":
+        splash(p, s, t)
+    elif state == "listening":
         listening(p, s, t)
     elif state == "thinking":
         thinking(p, s, t)
@@ -412,12 +503,16 @@ if __name__ == "__main__":  # preview every screen as PNGs and one animated GIF
     import time
 
     os.makedirs("preview", exist_ok=True)
+    apps = [{"app": "WhatsApp", "urgent": True}, {"app": "Instagram"}, {"app": "Gmail"}, {"app": "Slack"},
+            {"app": "Telegram"}, {"app": "Messages"}]
     base = {"phone": True, "battery": 72, "charging": False, "urgent": 0, "digest": 3,
             "weather": {"temp": 27, "code": 2, "day": True}, "now": datetime(2026, 11, 3, 16, 6),
-            "next_reminder": {"time": "5:00 PM", "text": "Call Mom about the doctor visit"}}
+            "next_reminder": None, "focus_today": 85, "apps": apps[1:4]}
     scenes = [
+        ("splash", {**base, "boot_age": 2.0}),
         ("idle", base),
-        ("idle-urgent", {**base, "urgent": 1, "weather": {"temp": 24, "code": 61, "day": True}}),
+        ("idle-urgent", {**base, "urgent": 1, "apps": apps, "weather": {"temp": 24, "code": 61, "day": True},
+                         "next_reminder": {"time": "5:00 PM", "text": "Call Mom about the doctor visit"}}),
         ("focus", {**base, "focus": {"active": True, "minutes": 25, "left_seconds": 1104, "held": 3, "held_urgent": 0}}),
         ("listening", {**base, "state": "listening"}),
         ("thinking", {**base, "state": "thinking"}),
@@ -426,6 +521,8 @@ if __name__ == "__main__":  # preview every screen as PNGs and one animated GIF
                         "reply": "Your mom says Papa is not feeling well. Maybe give her a call."}),
         ("reply-serious", {**base, "show_reply": True, "mood": "serious",
                            "reply": "Draft for Priya: I will send the demo link before 5 pm. Should I send it?"}),
+        ("alert-insta", {**base, "alert": {"app": "Instagram", "sender": "rahul_07", "urgent": False,
+                                           "text": "rahul_07 liked your reel"}}),
         ("alert-urgent", {**base, "alert": {"app": "WhatsApp", "sender": "Mom", "urgent": True,
                                             "text": "Beta, call me when you can. Papa ki tabiyat thodi kharab hai."}}),
         ("alert-reminder", {**base, "alert": {"kind": "reminder", "app": "Reminder", "sender": "Call Mom about the doctor visit",

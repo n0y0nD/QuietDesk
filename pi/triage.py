@@ -31,6 +31,24 @@ def _parse(text: str) -> dict:
     }
 
 
+BUSY_INSTRUCTIONS = (
+    "Write a short, friendly auto-reply (at most 20 words) to this message, in the same language and tone "
+    "as the message (English, Hindi or Hinglish). Say the user is in a focus session until {until} and will "
+    "reply after that. Do not answer their question or promise anything else. "
+    "End with exactly: (auto-reply from Lumi). Respond with only the reply text."
+)
+
+
+def busy_reply(sender: str, text: str, until: str) -> str:
+    """Muse Spark writes the 'busy until ...' auto-reply for one message during a focus session."""
+    resp = create(model=MODEL, instructions=BUSY_INSTRUCTIONS.format(until=until),
+                  input=f"From: {sender}\nMessage: {text}")
+    reply = (resp.output_text or "").strip().strip('"')
+    if "auto-reply" not in reply.lower():  # always say it was automatic
+        reply += " (auto-reply from Lumi)"
+    return reply
+
+
 def classify(app: str, sender: str, text: str) -> dict:
     now = datetime.now().strftime("%A %H:%M")
     resp = create(

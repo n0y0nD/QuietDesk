@@ -20,6 +20,10 @@ def _db():
         "id INTEGER PRIMARY KEY, app TEXT, sender TEXT, text TEXT, received TEXT, "
         "urgency TEXT, reason TEXT, draft TEXT, status TEXT DEFAULT 'new', reply TEXT)"
     )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS focus_log (id INTEGER PRIMARY KEY, start TEXT, minutes REAL, "
+        "held INTEGER, urgent INTEGER, auto_replies INTEGER, early INTEGER)"
+    )
     _add_phone_columns(conn)
     return conn
 
@@ -171,6 +175,43 @@ def stop_focus() -> dict:
     return focus.stop()
 
 
+def set_auto_reply(on: bool = True) -> dict:
+    return focus.set_auto_reply(on)
+
+
+def save_auto_reply(notification_id: int, text: str) -> None:
+    """Remember the auto-reply Hush sent; the message itself still waits for the user."""
+    with _db() as conn:
+        conn.execute("UPDATE notifications SET reply = ? WHERE id = ?", (text, notification_id))
+
+
+def log_focus(start: float, minutes: float, held: int, urgent: int, auto_replies: int, early: bool) -> None:
+    with _db() as conn:
+        conn.execute(
+            "INSERT INTO focus_log (start, minutes, held, urgent, auto_replies, early) VALUES (?, ?, ?, ?, ?, ?)",
+            (datetime.fromtimestamp(start).isoformat(timespec="minutes"), round(minutes, 1), held, urgent,
+             auto_replies, int(early)),
+        )
+
+
+def get_focus_stats() -> dict:
+    """Today's focus score: minutes focused (including a session still running), sessions,
+    messages held back, urgent ones let through, auto-replies sent."""
+    today = datetime.now().date().isoformat()
+    with _db() as conn:
+        rows = conn.execute(
+            "SELECT minutes, held, urgent, auto_replies FROM focus_log WHERE start >= ?", (today,)
+        ).fetchall()
+    stats = {"sessions": len(rows), "minutes": sum(r[0] for r in rows), "held_back": sum(r[1] for r in rows),
+             "urgent_let_through": sum(r[2] for r in rows), "auto_replies": sum(r[3] for r in rows)}
+    f = focus.status()
+    if f["active"]:
+        stats["minutes"] += (f["minutes"] * 60 - f["left_seconds"]) / 60
+        stats["running_now"] = True
+    stats["minutes"] = round(stats["minutes"])
+    return stats
+
+
 # Tool definitions in the Responses API format (flat: type, name, description, parameters).
 TOOL_SPECS = [
     {
@@ -266,6 +307,25 @@ TOOL_SPECS = [
         "description": "End the current focus session early.",
         "parameters": {"type": "object", "properties": {}},
     },
+    {
+        "type": "function",
+        "name": "set_auto_reply",
+        "description": "Turn polite auto-replies on or off for the current focus session: each person who "
+        "sends a non-urgent message on the real phone gets one short 'busy until <time>, will reply after' "
+        "message, marked as an auto-reply. Turn it on only when the user clearly asks or says yes.",
+        "parameters": {
+            "type": "object",
+            "properties": {"on": {"type": "boolean"}},
+            "required": ["on"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "get_focus_stats",
+        "description": "Today's focus score: minutes focused, sessions, messages held back, urgent ones "
+        "let through, auto-replies sent. Use when the user asks how their day or focus went.",
+        "parameters": {"type": "object", "properties": {}},
+    },
 ]
 
 TOOL_FUNCTIONS = {
@@ -277,6 +337,8 @@ TOOL_FUNCTIONS = {
     "draft_reply": draft_reply,
     "start_focus": start_focus,
     "stop_focus": stop_focus,
+    "set_auto_reply": set_auto_reply,
+    "get_focus_stats": get_focus_stats,
 }
 
 

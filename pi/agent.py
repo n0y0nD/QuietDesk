@@ -32,8 +32,9 @@ def create(**kwargs):
 def instructions() -> str:
     now = datetime.now().strftime("%A %Y-%m-%d %H:%M")
     return (
-        "You are QuietDesk, a calm voice assistant on a desk device that helps the user "
-        "stay focused while their phone is out of reach. Replies are spoken aloud by a simple "
+        "You are Lumi, the calm, warm voice of QuietDesk, a desk device that helps the user "
+        "stay focused while their phone is out of reach. If asked your name, you are Lumi. "
+        "Replies are spoken aloud by a simple "
         "voice, so answer in ONE short sentence (two only if really needed), plain words, "
         "no markdown, lists, emoji or abbreviations. "
         "Start every reply with a mood tag that sets the tone of the voice: [happy] for good news, "
@@ -47,6 +48,9 @@ def instructions() -> str:
         "says yes: call send_reply. If they want changes, draft again and ask again. Never send in the same "
         "turn you drafted. If it is unclear which message the user means, ask (name the senders). "
         "Prefer messages from the real phone over the simulated phone. "
+        "When you start a focus session, also ask whether to tell people who message that the user is busy "
+        "(auto-reply); call set_auto_reply with on=true only if the user asked for it or says yes. "
+        "When asked how the day or focus went, use get_focus_stats and say it in hours and minutes. "
         "Reply in the user's language (English or Hinglish). Say times in 12-hour form like 4:30 PM. "
         f"Current local time: {now}. {focus_line()}"
     )
@@ -64,6 +68,8 @@ KEEP_TURNS = 6  # how many past questions (with their tool calls) QuietDesk reme
 # Sending a message by voice needs a clear yes from the user, checked here in code (not left to the model).
 YES = re.compile(r"\b(yes|yeah|yep|yup|haan?|haa|ha|ji|send|sent|bhej\w*|ok|okay|sure|go ahead|kar do|do it)\b", re.I)
 NO = re.compile(r"\b(no|nope|nahi|nahin|nhi|mat|don'?t|cancel|wait|ruko|stop|change|badal\w*)\b", re.I)
+# Auto-replies go on only if the user's own words say yes or ask for them.
+ASKED_AUTO = re.compile(YES.pattern[:-3] + r"|busy|auto.?repl\w*|tell (them|people|everyone)|reply|bata\w*)\b", re.I)
 
 
 class Agent:
@@ -89,7 +95,9 @@ class Agent:
         nid = args.get("notification_id")
         draft = self.offered.get(nid)
         if draft is None:
-            return {"ok": False, "error": "Not sent. Draft the reply, read it to the user and ask first."}
+            return {"ok": False, "error": "Not sent, and that is expected: a reply can only be sent in the turn "
+                    "after the user heard the draft. Do not call send_reply or draft_reply again now. Just read the "
+                    "draft to the user word for word and ask 'Should I send it?'."}
         if not YES.search(user_text) or NO.search(user_text):
             return {"ok": False, "error": "Not sent: the user did not clearly say yes. Ask again."}
         if self.send is None:
@@ -126,6 +134,10 @@ class Agent:
                 args = json.loads(call.arguments or "{}")
                 if call.name == "send_reply":
                     result = self._send_reply(args, user_text)
+                elif call.name == "set_auto_reply" and args.get("on") and (
+                        not ASKED_AUTO.search(user_text) or NO.search(user_text)):
+                    # Turning auto-replies on needs the user's own yes or request, checked here in code.
+                    result = {"ok": False, "error": "Not turned on: ask the user first; turn it on only after they say yes."}
                 else:
                     result = run_tool(call.name, args)
                     if call.name == "draft_reply" and result.get("ok"):

@@ -41,7 +41,7 @@ def transcribe(wav_path: str) -> str:
         "mode": "PUSH_TO_TALK",
         "audioEncoding": "WAV",
         "languageBias": ["English", "Hindi"],
-        "keywords": ["QuietDesk"],
+        "keywords": ["QuietDesk", "Lumi"],
     }
     # The key goes in through stdin so it never shows up in the process list.
     cmd = [

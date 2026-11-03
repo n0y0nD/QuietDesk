@@ -31,7 +31,7 @@ import weather  # noqa: E402
 from agent import Agent  # noqa: E402
 from hardware import Hardware  # noqa: E402
 from phone import Phone  # noqa: E402
-from triage import classify  # noqa: E402
+from triage import busy_reply, classify  # noqa: E402
 from voice import transcribe  # noqa: E402
 
 HOST, PORT = "127.0.0.1", int(os.getenv("QUIETDESK_PORT", "8000"))
@@ -137,10 +137,25 @@ def handle_notification(app: str, sender: str, text: str, source: str = "demo",
         hw.show_alert(app, sender, text, urgent)  # message card on the OLED
     if urgent:
         speech = say(f"Urgent message from {sender} on {app}.", ding=True, mood="serious")
+    # Focus with auto-replies on: a non-urgent message from a real person gets one polite "busy" reply.
+    f = focus.status()
+    if source == "phone" and reply_id and not urgent and f["active"] and focus.claim_auto_reply(sender):
+        threading.Thread(target=auto_reply, args=(nid, sender, text, reply_id, f["ends_at"]), daemon=True).start()
     # The open page hears about it on its next poll; for real phone messages it also plays the alert,
     # since no page asked for this one (the simulated phone plays its own from the reply below).
     add_event(speech if source == "phone" else None)
     return {"id": nid, **result, "speech": speech}
+
+
+def auto_reply(nid: int, sender: str, text: str, reply_id: str, until: str) -> None:
+    try:
+        msg = busy_reply(sender, text, until)  # written by Muse Spark in the sender's language
+        phone.reply(reply_id, msg)
+        tools.save_auto_reply(nid, msg)
+        print(f"  auto-reply to {sender}: {msg}")
+        add_event(None)
+    except Exception as e:
+        print(f"  auto-reply failed: {e}")
 
 
 # Things the open page should know about without asking: new notifications and alerts to speak.
@@ -199,6 +214,28 @@ def _focus_info() -> dict:
     return f
 
 
+def log_focus_session(s: dict, early: bool) -> None:
+    """Every focus session that ends (on time or stopped early) goes into today's focus score."""
+    held = _held_since(s["start"])
+    minutes = (min(time.time(), s["end"]) - s["start"]) / 60
+    tools.log_focus(s["start"], minutes, len(held), sum(n["urgency"] == "urgent" for n in held),
+                    s.get("auto_count", 0), early)
+
+
+focus.on_end = log_focus_session
+
+
+def _waiting_apps() -> list:
+    """Apps with unread messages, newest first, for the little logos on the desk screen."""
+    apps = {}
+    for n in tools.all_notifications():
+        if n["status"] == "new":
+            a = apps.setdefault(n["app"], {"app": n["app"], "n": 0, "urgent": False})
+            a["n"] += 1
+            a["urgent"] = a["urgent"] or n["urgency"] == "urgent"
+    return list(apps.values())
+
+
 def on_reminder(r: dict) -> None:
     due = focus.clock(datetime.fromisoformat(r["due"]).timestamp())
     hw.show_alert("Reminder", r["text"], f"Now · {due}", kind="reminder")
@@ -218,8 +255,8 @@ def on_focus_done(s: dict) -> None:
             if SPEAK_ON == "pi":
                 tts.chime()
             r = ask_agent(f"My {s['minutes']} minute focus session just ended. In one or two short sentences, "
-                          "say well done and tell me what I missed (check missed notifications, urgent first). "
-                          "Don't draft replies.")
+                          "say well done, tell me what I missed (check missed notifications, urgent first) and "
+                          "my focus time today (get_focus_stats). Don't draft replies.")
             if r["speech"]:
                 r["speech"]["ding"] = True
             add_event(r["speech"])
@@ -243,7 +280,8 @@ def ticker() -> None:
                     on_reminder(r)
             st = phone.status()
             desk_info.update(phone=st["connected"], battery=st["battery"], charging=st["charging"],
-                             weather=weather.current(), next_reminder=_next_reminder(), focus=_focus_info())
+                             weather=weather.current(), next_reminder=_next_reminder(), focus=_focus_info(),
+                             apps=_waiting_apps(), focus_today=tools.get_focus_stats()["minutes"])
         except Exception as e:
             print(f"  ticker: {e}")
         first = False
@@ -258,6 +296,7 @@ def state() -> dict:
         "voice": True,
         "phone": phone.status(),
         "focus": focus.status(),
+        "focus_today": tools.get_focus_stats(),
         "weather": weather.current(),
     }
 

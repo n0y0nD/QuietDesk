@@ -34,6 +34,7 @@ class Hardware:
         self.info = None  # set by web.py: function returning phone, weather, reminder and focus details
         self._wake = threading.Event()
         self._running = True
+        self._boot = time.monotonic()  # Lumi says hello on the screen for the first seconds
         try:
             from gpiozero import LED, Button, PWMLED
 
@@ -118,7 +119,8 @@ class Hardware:
         s = dict(self.info() or {}) if self.info else {}
         s.update(state=self._state, urgent=self._urgent, digest=self._digest,
                  mood=self._mood, reply=self._reply, reply_age=now - self._reply_at,
-                 show_reply=bool(self._reply) and now - self._reply_at < reply_secs, alert=self._alert)
+                 show_reply=bool(self._reply) and now - self._reply_at < reply_secs, alert=self._alert,
+                 boot_age=now - self._boot)
         return s
 
     def _screen_loop(self):
