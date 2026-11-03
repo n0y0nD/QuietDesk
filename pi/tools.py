@@ -175,6 +175,16 @@ def stop_focus() -> dict:
     return focus.stop()
 
 
+def dismiss_notifications(sender: str = "", app: str = "") -> dict:
+    """Mark waiting notifications as handled (all of them, or only from one sender / app). Sends nothing."""
+    items = [n for n in all_notifications() if n["status"] == "new"
+             and (not sender or sender.lower().replace(" ", "") in (n["sender"] or "").lower().replace(" ", ""))
+             and (not app or app.lower() == (n["app"] or "").lower())]
+    for n in items:
+        set_notification_status(n["id"], "dismissed")
+    return {"ok": True, "dismissed": len(items)}
+
+
 ring_hook = None  # web.py sets this to the phone's ring function
 
 
@@ -331,6 +341,19 @@ TOOL_SPECS = [
     },
     {
         "type": "function",
+        "name": "dismiss_notifications",
+        "description": "Clear waiting notifications from the desk (marks them handled; nothing is sent or deleted "
+        "on the phone). Leave sender and app empty to clear all, or give one to clear only those.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "sender": {"type": "string", "description": "Name or number, optional"},
+                "app": {"type": "string", "description": "e.g. WhatsApp, optional"},
+            },
+        },
+    },
+    {
+        "type": "function",
         "name": "ring_phone",
         "description": "Make the user's phone ring loudly so they can find it (works even on silent).",
         "parameters": {"type": "object", "properties": {}},
@@ -356,6 +379,7 @@ TOOL_FUNCTIONS = {
     "set_auto_reply": set_auto_reply,
     "get_focus_stats": get_focus_stats,
     "ring_phone": ring_phone,
+    "dismiss_notifications": dismiss_notifications,
 }
 
 
