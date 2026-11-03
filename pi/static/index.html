@@ -79,6 +79,23 @@
                   border: 1px solid var(--line); background: #12151c; }
   .phone-status.on { color: var(--ok); border-color: rgba(74,222,128,.35); }
   .phone-status.off { color: var(--muted); }
+  .meta-panel { grid-column: 1 / -1; }
+  .meta-totals { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .meta-total { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: #12151c; }
+  .meta-total b { font-size: 20px; display: block; }
+  .meta-total span { color: var(--muted); font-size: 12px; }
+  .meta-calls { display: flex; flex-direction: column; gap: 4px; max-height: 168px; overflow-y: auto; }
+  .meta-row { display: grid; grid-template-columns: 70px minmax(0, 210px) minmax(0, 1fr) 70px; gap: 10px; align-items: center;
+              padding: 6px 10px; border-radius: 8px; background: #12151c; font-size: 13px; }
+  .meta-row.fresh { animation: flash 1.6s ease-out; }
+  @keyframes flash { from { background: #1f3352; } to { background: #12151c; } }
+  .meta-row .when { color: var(--muted); font: 12px ui-monospace, Consolas, monospace; }
+  .meta-row .model { font: 12px ui-monospace, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta-row .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta-row .what small { color: var(--muted); margin-left: 6px; }
+  .meta-row .ms { text-align: right; font: 12px ui-monospace, Consolas, monospace; color: var(--ok); }
+  .meta-row.fail .ms { color: var(--urgent); }
+  @media (max-width: 600px) { .meta-row { grid-template-columns: 60px minmax(0, 1fr) 56px; } .meta-row .model { display: none; } }
   details.sim { margin-bottom: 12px; }
   details.sim summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-bottom: 10px; }
   .src { font-size: 11px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); }
@@ -95,6 +112,13 @@
 </header>
 
 <main>
+  <section class="meta-panel">
+    <h2>Meta AI, live</h2>
+    <div class="sub">Every Meta model call QuietDesk makes, as it happens.</div>
+    <div id="metaTotals" class="meta-totals"></div>
+    <div id="metaCalls" class="meta-calls"><div class="empty">No calls yet. Hold the button and talk, or wait for a message.</div></div>
+  </section>
+
   <section>
     <h2>Desk</h2>
     <div class="sub">Hold the button on the desk (or this red button, or the Space bar) and talk. Release to send.</div>
@@ -113,6 +137,7 @@
       <button class="btn" data-q="Start a 25 minute focus session.">Focus 25 min</button>
       <button class="btn" data-q="Stop my focus session.">Stop focus</button>
       <button class="btn" data-q="How did my focus go today?">Focus score</button>
+      <button class="btn" data-q="Where is my phone?">Find my phone</button>
     </div>
     <div id="focusLine" class="sub" style="margin:-6px 0 12px"></div>
     <div id="log"></div>
@@ -139,6 +164,7 @@
     <div style="text-align:right;margin:-6px 0 10px"><button class="btn" id="reset" style="font-size:12px">Clear notifications</button></div>
     <div id="notifs"></div>
   </section>
+
 </main>
 
 <script>
@@ -364,6 +390,27 @@ async function newEvents(seq, speakThem) {
   } catch (e) { /* try again on the next event */ }
 }
 
+// ---------- Meta AI, live: every Meta model call, newest first ----------
+const META_NAMES = { "muse-spark-1.3": "Muse Spark", "muse-voice-transcribe-1.0": "Muse Voice Transcribe",
+                     "facebook/mms-tts-eng": "MMS-TTS" };
+let lastMeta = null, seenMeta = 0;
+async function loadMeta(seq) {
+  lastMeta = seq;
+  try {
+    const m = await (await fetch("/api/meta")).json();
+    $("#metaTotals").innerHTML = Object.entries(m.totals).map(([model, n]) =>
+      `<div class="meta-total"><b>${n}</b><span>${esc(META_NAMES[model] || model)} calls</span></div>`).join("");
+    if (m.calls.length) {
+      $("#metaCalls").innerHTML = m.calls.map((c) => `<div class="meta-row ${c.ok ? "" : "fail"} ${c.seq > seenMeta && seenMeta ? "fresh" : ""}">
+        <span class="when">${esc(c.at)}</span><span class="model">${esc(c.model)}</span>
+        <span class="what">${esc(c.purpose)}<small>${esc(c.detail)}</small></span>
+        <span class="ms">${c.ok ? (c.ms / 1000).toFixed(1) + " s" : "failed"}</span></div>`).join("");
+    }
+    seenMeta = m.seq;
+  } catch (e) { /* next poll */ }
+}
+loadMeta(null);
+
 // Desk mode (?desk=1): the hidden window that starts with the laptop (start-desk.ps1). It is QuietDesk's
 // ears and voice: it answers the desk button and speaks alerts even while minimised.
 const DESK = new URLSearchParams(location.search).has("desk");
@@ -379,6 +426,7 @@ setInterval(async () => {
     const h = await (await fetch(DESK ? "/api/hw?desk=1" : "/api/hw")).json();
     const mine = DESK || !h.desk_window;
     if (h.events !== lastEvent) newEvents(h.events, mine);
+    if (h.meta !== lastMeta) loadMeta(h.meta);
     if (!h.hardware || !mine) { deskHeld = false; return; }
     if (h.down && !deskHeld) { deskHeld = true; startRec(); }
     else if (!h.down && deskHeld) { deskHeld = false; stopRec(); }

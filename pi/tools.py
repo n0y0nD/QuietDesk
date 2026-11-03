@@ -175,6 +175,16 @@ def stop_focus() -> dict:
     return focus.stop()
 
 
+ring_hook = None  # web.py sets this to the phone's ring function
+
+
+def ring_phone() -> dict:
+    if ring_hook is None:
+        return {"ok": False, "error": "no phone is linked"}
+    ring_hook()
+    return {"ok": True, "status": "the phone is ringing"}
+
+
 def set_auto_reply(on: bool = True) -> dict:
     return focus.set_auto_reply(on)
 
@@ -321,6 +331,12 @@ TOOL_SPECS = [
     },
     {
         "type": "function",
+        "name": "ring_phone",
+        "description": "Make the user's phone ring loudly so they can find it (works even on silent).",
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "type": "function",
         "name": "get_focus_stats",
         "description": "Today's focus score: minutes focused, sessions, messages held back, urgent ones "
         "let through, auto-replies sent. Use when the user asks how their day or focus went.",
@@ -339,6 +355,7 @@ TOOL_FUNCTIONS = {
     "stop_focus": stop_focus,
     "set_auto_reply": set_auto_reply,
     "get_focus_stats": get_focus_stats,
+    "ring_phone": ring_phone,
 }
 
 

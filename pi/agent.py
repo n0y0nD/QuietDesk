@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from openai import APIStatusError, OpenAI
 
 import focus
+import metalog
 from tools import TOOL_SPECS, run_tool
 
 load_dotenv()
@@ -24,9 +25,14 @@ client = OpenAI(base_url="https://api.meta.ai/v1", api_key=os.environ["MODEL_API
 EFFORT = os.getenv("QUIETDESK_EFFORT", "minimal")
 
 
-def create(**kwargs):
-    """Responses API call with QuietDesk's reasoning effort."""
-    return client.responses.create(reasoning={"effort": EFFORT}, **kwargs)
+def create(purpose: str = "Lumi", **kwargs):
+    """Responses API call with QuietDesk's reasoning effort, recorded for the live Meta AI panel."""
+    with metalog.timed(kwargs.get("model", MODEL), purpose) as t:
+        resp = client.responses.create(reasoning={"effort": EFFORT}, **kwargs)
+        usage = getattr(resp, "usage", None)
+        if usage is not None:
+            t.detail = f"{getattr(usage, 'input_tokens', '?')} in / {getattr(usage, 'output_tokens', '?')} out tokens"
+    return resp
 
 
 def instructions() -> str:

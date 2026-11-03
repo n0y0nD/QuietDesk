@@ -41,7 +41,7 @@ BUSY_INSTRUCTIONS = (
 
 def busy_reply(sender: str, text: str, until: str) -> str:
     """Muse Spark writes the 'busy until ...' auto-reply for one message during a focus session."""
-    resp = create(model=MODEL, instructions=BUSY_INSTRUCTIONS.format(until=until),
+    resp = create(purpose="Auto-reply", model=MODEL, instructions=BUSY_INSTRUCTIONS.format(until=until),
                   input=f"From: {sender}\nMessage: {text}")
     reply = (resp.output_text or "").strip().strip('"')
     if "auto-reply" not in reply.lower():  # always say it was automatic
@@ -51,7 +51,7 @@ def busy_reply(sender: str, text: str, until: str) -> str:
 
 def classify(app: str, sender: str, text: str) -> dict:
     now = datetime.now().strftime("%A %H:%M")
-    resp = create(
+    resp = create(purpose="Triage",
         model=MODEL,
         instructions=TRIAGE_INSTRUCTIONS,
         input=f"Time: {now}\nApp: {app}\nFrom: {sender}\nMessage: {text}",

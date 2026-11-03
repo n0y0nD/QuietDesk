@@ -25,6 +25,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).with_name(".env"))
 
 import focus  # noqa: E402
+import metalog  # noqa: E402
 import tools  # noqa: E402
 import tts  # noqa: E402
 import weather  # noqa: E402
@@ -180,6 +181,7 @@ def phone_notification(app, sender, text, phone_id, reply_id) -> None:
 
 # The real phone, through KDE Connect. QUIETDESK_PHONE=off to use only the simulated phone.
 phone = Phone(phone_notification)
+tools.ring_hook = phone.ring  # "Lumi, where's my phone?"
 
 
 # ---- Desk screen details and timers, checked once a second ----
@@ -330,7 +332,9 @@ class Handler(BaseHTTPRequestHandler):
             if self.path.endswith("desk=1"):  # the hidden desk window on the laptop (start-desk.ps1)
                 desk_window["seen"] = time.monotonic()
             self._json({"down": hw.button_down, "presses": hw.presses, "hardware": hw.ok, "events": event_seq,
-                        "desk_window": time.monotonic() - desk_window["seen"] < 2})
+                        "desk_window": time.monotonic() - desk_window["seen"] < 2, "meta": metalog.seq})
+        elif self.path == "/api/meta":  # the live Meta AI panel
+            self._json(metalog.snapshot())
         elif m := re.fullmatch(r"/api/events\?after=(\d+)", self.path):
             after = int(m.group(1))
             with events_lock:

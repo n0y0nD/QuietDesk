@@ -12,6 +12,8 @@ import tempfile
 import threading
 import wave
 
+import metalog
+
 # Which voice QuietDesk uses:
 #   mms    = Meta MMS-TTS, open-source Meta model running on the Pi (male, default)
 #   pico   = SVOX Pico, built-in system voice (female)
@@ -128,7 +130,9 @@ def _mms_phrases(text: str, mood: str = "neutral"):
 
 
 def _mms_wav(text: str, mood: str = "neutral") -> bytes:
-    pcm = b"".join(_mms_phrases(text, mood))
+    with metalog.timed("facebook/mms-tts-eng", "Voice (on the Pi)") as t:  # live Meta AI panel
+        pcm = b"".join(_mms_phrases(text, mood))
+        t.detail = f"{len(pcm) / 2 / MMS_RATE:.1f} s of speech, {mood}"
     if not pcm:
         return b""
     buf = io.BytesIO()

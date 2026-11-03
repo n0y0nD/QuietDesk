@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).with_name(".env"))
 
+import metalog  # noqa: E402
 from agent import Agent  # noqa: E402  (needs .env loaded first)
 
 ASR_URL = "https://api.meta.ai/v1/asr/transcribe"
@@ -52,10 +53,13 @@ def transcribe(wav_path: str) -> str:
         "-F", f"audio=@{wav_path};type=audio/wav",
     ]
     header = f"Authorization: Bearer {os.environ['MODEL_API_KEY']}\n"
-    result = subprocess.run(cmd, input=header, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"Transcribe failed: {result.stdout or result.stderr}")
-    return json.loads(result.stdout).get("transcript", "").strip()
+    with metalog.timed(ASR_MODEL, "Speech to text") as t:  # shown on the live Meta AI panel
+        result = subprocess.run(cmd, input=header, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(f"Transcribe failed: {result.stdout or result.stderr}")
+        text = json.loads(result.stdout).get("transcript", "").strip()
+        t.detail = f"{len(text.split())} words heard"
+    return text
 
 
 def speak(text: str, mood: str = "neutral") -> None:

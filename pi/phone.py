@@ -143,6 +143,13 @@ class Phone:
         notifs.sendReply(reply_id, text, dbus_interface=NOTIFS_IFACE)
         self._sent = (self._sent + [text])[-10:]
 
+    def ring(self) -> None:
+        """Make the phone ring loudly (KDE Connect "Find my phone"), even if it is on silent."""
+        if not (self.connected and self.device):
+            raise RuntimeError("The phone is not connected (open KDE Connect on the phone, same Wi-Fi).")
+        self._obj(f"{DAEMON_PATH}/devices/{self.device}/findmyphone").ring(
+            dbus_interface="org.kde.kdeconnect.device.findmyphone")
+
     def _read_battery(self):
         import dbus
 
