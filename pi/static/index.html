@@ -135,13 +135,48 @@ const PRESETS = [
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const statusEl = $("#status");
-let player = null;
+let player = null, speakId = 0;
 
-function play(b64) {
-  if (!b64) return;
+// Soft two-note "ding" before urgent alerts (pure tones made here, same notes as on the Pi).
+function chime() {
+  return new Promise((done) => {
+    const ac = new AudioContext(), t0 = ac.currentTime;
+    [[880, 0], [1318.5, 0.12]].forEach(([freq, start]) => {
+      const osc = ac.createOscillator(), gain = ac.createGain();
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, t0 + start);
+      gain.gain.linearRampToValueAtTime(0.35, t0 + start + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + start + 0.7);
+      osc.connect(gain).connect(ac.destination);
+      osc.start(t0 + start); osc.stop(t0 + start + 0.75);
+    });
+    setTimeout(() => { ac.close(); done(); }, 800);
+  });
+}
+
+function playBlob(blob) {
+  return new Promise((done) => {
+    const url = URL.createObjectURL(blob);
+    player = new Audio(url);
+    player.onended = player.onerror = () => { URL.revokeObjectURL(url); done(); };
+    player.play().catch(done);
+  });
+}
+
+// Play a reply phrase by phrase: phrase 1 plays while phrase 2 is being made on the Pi.
+async function speak(s) {
+  if (!s || !s.count) return;
+  const me = ++speakId;
   if (player) player.pause();
-  player = new Audio("data:audio/wav;base64," + b64);
-  player.play().catch(() => {});
+  if (s.ding) await chime();
+  const get = (i) => fetch(`/api/speech/${s.token}/${i}`).then((r) => (r.ok ? r.blob() : null)).catch(() => null);
+  let next = get(0);
+  for (let i = 0; i < s.count; i++) {
+    const blob = await next;
+    if (i + 1 < s.count) next = get(i + 1);
+    if (me !== speakId) return;  // a newer reply took over
+    if (blob) await playBlob(blob);
+  }
 }
 
 async function api(path, body, isWav) {
@@ -172,7 +207,7 @@ async function ask(text) {
   try {
     const r = await api("/api/ask", { text });
     addMsg("QuietDesk", r.reply, r.tools, r.mood);
-    play(r.audio);
+    speak(r.speech);
     statusEl.textContent = "Ready";
   } catch (e) { statusEl.textContent = "Error: " + e.message; }
   refresh();
@@ -243,7 +278,7 @@ async function stopRec() {
     const r = await api("/api/voice", wav, true);
     if (r.heard) addMsg("You (voice)", r.heard);
     addMsg("QuietDesk", r.reply, r.tools, r.mood);
-    play(r.audio);
+    speak(r.speech);
     statusEl.textContent = "Ready";
   } catch (e) { statusEl.textContent = "Error: " + e.message; }
   $("#talk").disabled = false;
@@ -280,7 +315,7 @@ async function notify(n) {
   $("#notifs").prepend(busy);
   try {
     const r = await api("/api/notify", n);
-    play(r.audio);  // urgent ones are read out loud right away
+    speak(r.speech);  // urgent ones are read out loud right away
   } catch (e) { alert("Error: " + e.message); }
   busy.remove();
   refresh();

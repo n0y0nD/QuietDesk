@@ -1,7 +1,7 @@
 """QuietDesk web console: voice + notification demo, served from the Pi.
 
 The laptop browser acts as the mic and speaker (the Pi has no mic yet). All AI runs here on the Pi:
-Muse Voice Transcribe for speech-to-text, Muse Spark for answers and triage, espeak-ng for the voice.
+Muse Voice Transcribe for speech-to-text, Muse Spark for answers and triage, Meta MMS-TTS for the voice.
 
 Run on the Pi:   .venv/bin/python web.py
 On the laptop:   ssh -L 8000:localhost:8000 admin@raspberrypi5.local
@@ -9,7 +9,7 @@ Then open:       http://localhost:8000
 (The server only listens on the Pi itself; the SSH tunnel is what lets the laptop in,
 and it makes the page count as "localhost" so the browser allows the mic.)
 """
-import base64
+import uuid
 import json
 import os
 import re
@@ -60,15 +60,27 @@ def _speak_on_pi(text: str, ding: bool, mood: str) -> None:
         hw.set_state("ready")
 
 
-def say(text: str, ding: bool = False, mood: str = "neutral") -> str:
+# Replies waiting to be fetched by the browser, phrase by phrase: token -> (phrases, mood)
+speeches = {}
+
+
+def say(text: str, ding: bool = False, mood: str = "neutral"):
     """Speak a reply (Meta MMS-TTS in the given mood, espeak-ng as backup), with an optional chime.
-    Returns base64 WAV for the browser, or "" when the Pi speaks it itself."""
+
+    SPEAK_ON=pi: the Pi plays it on its own speaker and this returns None.
+    SPEAK_ON=browser: returns {"token", "count", "ding"}; the page then fetches
+    /api/speech/<token>/<i> one phrase at a time, so it can start playing after the first phrase."""
     if not text:
-        return ""
+        return None
     if SPEAK_ON == "pi":
         threading.Thread(target=_speak_on_pi, args=(text, ding, mood), daemon=True).start()
-        return ""
-    return base64.b64encode(tts.wav_bytes(text, mood)).decode()
+        return None
+    phrases = [p for p in re.split(r"(?<=[,;:.!?])\s+", text.strip()) if p]
+    token = uuid.uuid4().hex
+    speeches[token] = (phrases, mood)
+    while len(speeches) > 20:  # forget old replies
+        speeches.pop(next(iter(speeches)))
+    return {"token": token, "count": len(phrases), "ding": ding}
 
 
 def ask_agent(text: str) -> dict:
@@ -85,7 +97,7 @@ def ask_agent(text: str) -> dict:
     refresh_counts()  # the agent may have drafted replies or read notifications
     if SPEAK_ON != "pi":
         hw.set_state("ready")
-    return {"reply": reply, "mood": mood, "tools": used, "audio": say(reply, mood=mood)}
+    return {"reply": reply, "mood": mood, "tools": used, "speech": say(reply, mood=mood)}
 
 
 def state() -> dict:
@@ -122,6 +134,16 @@ class Handler(BaseHTTPRequestHandler):
             self._json(state())
         elif self.path == "/api/hw":  # the page polls this to use the desk button as push-to-talk
             self._json({"down": hw.button_down, "presses": hw.presses, "hardware": hw.ok})
+        elif m := re.fullmatch(r"/api/speech/([0-9a-f]{32})/(\d+)", self.path):
+            # One phrase of a reply as WAV (Meta MMS-TTS), so the browser can start playing early.
+            phrases, mood = speeches.get(m.group(1), ([], "neutral"))
+            i = int(m.group(2))
+            if i >= len(phrases):
+                return self._json({"error": "no such phrase"}, 404)
+            try:
+                self._send(200, tts.wav_bytes(phrases[i], mood), "audio/wav")
+            except Exception as e:
+                self._json({"error": str(e)}, 500)
         else:
             self._json({"error": "not found"}, 404)
 
@@ -142,7 +164,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not heard:
                     msg = "Sorry, I didn't catch that."
                     hw.set_reply(msg)
-                    return self._json({"heard": "", "reply": msg, "tools": [], "audio": say(msg)})
+                    return self._json({"heard": "", "reply": msg, "tools": [], "speech": say(msg)})
                 return self._json({"heard": heard, **ask_agent(heard)})
 
             data = json.loads(self._body() or b"{}")
@@ -161,11 +183,11 @@ class Handler(BaseHTTPRequestHandler):
                 result = classify(app, sender, text)
                 nid = tools.add_notification(app, sender, text, **result)
                 refresh_counts()
-                audio = ""
+                speech = None
                 if result["urgency"] == "urgent":
                     hw.set_reply(f"Urgent: {sender} on {app}", "serious")
-                    audio = say(f"Urgent message from {sender} on {app}.", ding=True, mood="serious")
-                return self._json({"id": nid, **result, "audio": audio})
+                    speech = say(f"Urgent message from {sender} on {app}.", ding=True, mood="serious")
+                return self._json({"id": nid, **result, "speech": speech})
 
             if self.path == "/api/reset":  # clean slate between demo takes
                 tools.clear_notifications()
