@@ -3,6 +3,7 @@ import json
 import re
 from datetime import datetime
 
+import metalog
 from agent import MODEL, create
 
 TRIAGE_INSTRUCTIONS = (
@@ -46,6 +47,7 @@ def busy_reply(sender: str, text: str, until: str) -> str:
     reply = (resp.output_text or "").strip().strip('"')
     if "auto-reply" not in reply.lower():  # always say it was automatic
         reply += " (auto-reply from Lumi)"
+    metalog.add_result("Auto-reply", f"to {sender}")
     return reply
 
 
@@ -57,6 +59,8 @@ def classify(app: str, sender: str, text: str) -> dict:
         input=f"Time: {now}\nApp: {app}\nFrom: {sender}\nMessage: {text}",
     )
     try:
-        return _parse(resp.output_text)
+        result = _parse(resp.output_text)
     except (json.JSONDecodeError, AttributeError):
-        return {"urgency": "digest", "reason": "Could not sort this one, saved for the digest.", "draft": ""}
+        result = {"urgency": "digest", "reason": "Could not sort this one, saved for the digest.", "draft": ""}
+    metalog.add_result("Triage", f"{sender}: {'URGENT' if result['urgency'] == 'urgent' else 'can wait'}")
+    return result

@@ -80,23 +80,57 @@
                   border: 1px solid var(--line); background: #12151c; }
   .phone-status.on { color: var(--ok); border-color: rgba(74,222,128,.35); }
   .phone-status.off { color: var(--muted); }
-  .meta-panel { grid-column: 1 / -1; }
-  .meta-totals { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-  .meta-total { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: #12151c; }
-  .meta-total b { font-size: 20px; display: block; }
-  .meta-total span { color: var(--muted); font-size: 12px; }
-  .meta-calls { display: flex; flex-direction: column; gap: 4px; max-height: 168px; overflow-y: auto; }
-  .meta-row { display: grid; grid-template-columns: 70px minmax(0, 210px) minmax(0, 1fr) 70px; gap: 10px; align-items: center;
-              padding: 6px 10px; border-radius: 8px; background: #12151c; font-size: 13px; }
-  .meta-row.fresh { animation: flash 1.6s ease-out; }
-  @keyframes flash { from { background: #1f3352; } to { background: #12151c; } }
-  .meta-row .when { color: var(--muted); font: 12px ui-monospace, Consolas, monospace; }
-  .meta-row .model { font: 12px ui-monospace, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .meta-row .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .meta-row .what small { color: var(--muted); margin-left: 6px; }
-  .meta-row .ms { text-align: right; font: 12px ui-monospace, Consolas, monospace; color: var(--ok); }
-  .meta-row.fail .ms { color: var(--urgent); }
-  @media (max-width: 600px) { .meta-row { grid-template-columns: 60px minmax(0, 1fr) 56px; } .meta-row .model { display: none; } }
+  /* ---- Meta AI, live ---- */
+  .meta-panel { grid-column: 1 / -1; background: linear-gradient(180deg, #161b26, var(--panel) 60%); }
+  .mp-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .mp-head h2 { display: flex; align-items: center; gap: 9px; font-size: 18px; }
+  .mp-head .sub { margin: 4px 0 0; }
+  .live-dot { width: 9px; height: 9px; border-radius: 50%; background: #ff4d5e; box-shadow: 0 0 0 0 rgba(255,77,94,.6);
+              animation: live 1.8s infinite; }
+  @keyframes live { 0% { box-shadow: 0 0 0 0 rgba(255,77,94,.55); } 70%, 100% { box-shadow: 0 0 0 8px rgba(255,77,94,0); } }
+  .mp-sum { display: flex; gap: 8px; flex-wrap: wrap; }
+  .mp-sum div { background: #10131a; border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; text-align: center; min-width: 78px; }
+  .mp-sum b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .mp-sum span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; }
+
+  .mp-flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 10px; align-items: stretch; margin-bottom: 16px; }
+  .mp-arrow { align-self: center; color: var(--muted); font-size: 20px; }
+  .mp-step { --c: var(--accent); position: relative; background: #10131a; border: 1px solid var(--line); border-radius: 14px;
+             padding: 14px; transition: border-color .3s, box-shadow .3s; }
+  .mp-step.pulse { border-color: var(--c); box-shadow: 0 0 0 1px var(--c), 0 0 24px -4px var(--c); }
+  .mp-top { display: flex; align-items: center; gap: 10px; }
+  .mp-icon { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; flex: none;
+             background: color-mix(in srgb, var(--c) 16%, transparent); color: var(--c); }
+  .mp-icon svg { width: 21px; height: 21px; }
+  .mp-verb { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--c); }
+  .mp-name { font-weight: 650; font-size: 15px; line-height: 1.2; }
+  .mp-role { color: var(--text); opacity: .85; font-size: 13px; margin: 10px 0 8px; min-height: 36px; }
+  .mp-foot { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
+  .mp-where { border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+  .mp-stat b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+  .mp-list-head { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px;
+                  text-transform: uppercase; letter-spacing: .6px; margin-bottom: 6px; }
+  .meta-calls { display: flex; flex-direction: column; gap: 5px; max-height: 232px; overflow-y: auto; padding-right: 2px; }
+  .mp-row { --c: var(--accent); display: grid; grid-template-columns: 4px minmax(0, 1fr) 118px; gap: 12px; align-items: center;
+            padding: 8px 12px 8px 0; border-radius: 10px; background: #10131a; overflow: hidden; }
+  .mp-row::before { content: ""; align-self: stretch; background: var(--c); border-radius: 0 3px 3px 0; margin: -8px 0; }
+  .mp-row.fresh { animation: flash 2s ease-out; }
+  @keyframes flash { from { background: color-mix(in srgb, var(--c) 22%, #10131a); } to { background: #10131a; } }
+  .mp-title { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mp-title em { font-style: normal; color: var(--c); font-weight: 600; margin-left: 4px; }
+  .mp-meta { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mp-meta .m { color: var(--c); }
+  .mp-time { display: flex; align-items: center; gap: 8px; justify-content: flex-end; font: 12px ui-monospace, Consolas, monospace; }
+  .mp-bar { width: 56px; height: 5px; border-radius: 3px; background: #232937; overflow: hidden; }
+  .mp-bar i { display: block; height: 100%; background: var(--c); border-radius: 3px; }
+  .mp-row.fail .mp-time { color: var(--urgent); }
+  @media (max-width: 760px) {
+    .mp-flow { grid-template-columns: 1fr; }
+    .mp-arrow { justify-self: center; transform: rotate(90deg); }
+    .mp-row { grid-template-columns: 4px minmax(0, 1fr) 54px; }
+    .mp-bar { display: none; }
+  }
   details.sim { margin-bottom: 12px; }
   details.sim summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-bottom: 10px; }
   .src { font-size: 11px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); }
@@ -114,9 +148,36 @@
 
 <main>
   <section class="meta-panel">
-    <h2>Meta AI, live</h2>
-    <div class="sub">Every Meta model call QuietDesk makes, as it happens.</div>
-    <div id="metaTotals" class="meta-totals"></div>
+    <div class="mp-head">
+      <div>
+        <h2><span class="live-dot"></span>Meta AI, live</h2>
+        <div class="sub">Lumi listens, thinks and speaks with Meta models. Each step lights up the moment it runs.</div>
+      </div>
+      <div id="metaSum" class="mp-sum"></div>
+    </div>
+    <div class="mp-flow">
+      <div class="mp-step" data-model="muse-voice-transcribe-1.0" style="--c:#38bdf8">
+        <div class="mp-top"><div class="mp-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
+          <div><div class="mp-verb">1 · Listens</div><div class="mp-name">Muse Voice Transcribe</div></div></div>
+        <div class="mp-role">Turns what you say into text.</div>
+        <div class="mp-foot"><span class="mp-where">Meta Model API</span><span class="mp-stat"></span></div>
+      </div>
+      <div class="mp-arrow">→</div>
+      <div class="mp-step" data-model="muse-spark-1.3" style="--c:#a78bfa">
+        <div class="mp-top"><div class="mp-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></div>
+          <div><div class="mp-verb">2 · Thinks</div><div class="mp-name">Muse Spark 1.3</div></div></div>
+        <div class="mp-role">Answers you, sorts each message, writes replies and picks the right action.</div>
+        <div class="mp-foot"><span class="mp-where">Meta Model API</span><span class="mp-stat"></span></div>
+      </div>
+      <div class="mp-arrow">→</div>
+      <div class="mp-step" data-model="facebook/mms-tts-eng" style="--c:#4ade80">
+        <div class="mp-top"><div class="mp-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19.5 5.5a9 9 0 0 1 0 13"/></svg></div>
+          <div><div class="mp-verb">3 · Speaks</div><div class="mp-name">MMS-TTS</div></div></div>
+        <div class="mp-role">Lumi's voice. Pick "Meta MMS-TTS (Pi)" in the Voice menu.</div>
+        <div class="mp-foot"><span class="mp-where">On the Pi, offline</span><span class="mp-stat"></span></div>
+      </div>
+    </div>
+    <div class="mp-list-head"><span>Every call, newest first</span><span>time taken</span></div>
     <div id="metaCalls" class="meta-calls"><div class="empty">No calls yet. Hold the button and talk, or wait for a message.</div></div>
   </section>
 
@@ -442,22 +503,55 @@ async function newEvents(seq, speakThem) {
 }
 
 // ---------- Meta AI, live: every Meta model call, newest first ----------
-const META_NAMES = { "muse-spark-1.3": "Muse Spark", "muse-voice-transcribe-1.0": "Muse Voice Transcribe",
-                     "facebook/mms-tts-eng": "MMS-TTS" };
-let lastMeta = null, seenMeta = 0;
+const META_MODELS = {  // name and colour of each Meta model (same colours as the three steps above)
+  "muse-voice-transcribe-1.0": ["Muse Voice Transcribe", "#38bdf8"],
+  "muse-spark-1.3": ["Muse Spark", "#a78bfa"],
+  "facebook/mms-tts-eng": ["MMS-TTS", "#4ade80"],
+};
+const META_WHAT = {  // what each kind of call does, in plain words
+  "Speech to text": "Heard what you said",
+  "Lumi": "Thought about your request",
+  "Triage": "Sorted a new phone message",
+  "Auto-reply": "Wrote a \"busy\" auto-reply",
+  "Voice (on the Pi)": "Spoke Lumi's answer",
+};
+const secs = (ms) => (ms / 1000).toFixed(1) + " s";
+const clock12 = (ts) => new Date(ts * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+let lastMeta = null, seenCall = 0;
 async function loadMeta(seq) {
   lastMeta = seq;
   try {
     const m = await (await fetch("/api/meta")).json();
-    $("#metaTotals").innerHTML = Object.entries(m.totals).map(([model, n]) =>
-      `<div class="meta-total"><b>${n}</b><span>${esc(META_NAMES[model] || model)} calls</span></div>`).join("");
+    const all = Object.values(m.stats || {});
+    const calls = all.reduce((a, s) => a + s.calls, 0), tokens = all.reduce((a, s) => a + s.tokens, 0);
+    const avg = calls ? all.reduce((a, s) => a + s.ms, 0) / calls : 0;
+    $("#metaSum").innerHTML = `<div><b>${calls}</b><span>calls</span></div>
+      <div><b>${tokens.toLocaleString()}</b><span>tokens</span></div>
+      <div><b>${calls ? secs(avg) : "–"}</b><span>avg time</span></div>`;
+    document.querySelectorAll(".mp-step").forEach((el) => {
+      const s = (m.stats || {})[el.dataset.model];
+      el.querySelector(".mp-stat").innerHTML = s ? `<b>${s.calls}</b> call${s.calls === 1 ? "" : "s"} · avg ${secs(s.ms / s.calls)}` : "not used yet";
+    });
+    // Light up the step of every call that is new since the last look.
+    const fresh = m.calls.filter((c) => c.seq > seenCall);
+    if (seenCall) fresh.forEach((c) => {
+      const el = document.querySelector(`.mp-step[data-model="${CSS.escape(c.model)}"]`);
+      if (!el) return;
+      el.classList.remove("pulse"); void el.offsetWidth; el.classList.add("pulse");
+      clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove("pulse"), 1800);
+    });
     if (m.calls.length) {
-      $("#metaCalls").innerHTML = m.calls.map((c) => `<div class="meta-row ${c.ok ? "" : "fail"} ${c.seq > seenMeta && seenMeta ? "fresh" : ""}">
-        <span class="when">${esc(c.at)}</span><span class="model">${esc(c.model)}</span>
-        <span class="what">${esc(c.purpose)}<small>${esc(c.detail)}</small></span>
-        <span class="ms">${c.ok ? (c.ms / 1000).toFixed(1) + " s" : "failed"}</span></div>`).join("");
+      const longest = Math.max(3000, ...m.calls.map((c) => c.ms));
+      $("#metaCalls").innerHTML = m.calls.map((c) => {
+        const [name, color] = META_MODELS[c.model] || [c.model, "var(--accent)"];
+        const facts = [c.tokens ? `${c.tokens.toLocaleString()} tokens` : c.model === "muse-spark-1.3" ? "" : c.detail, clock12(c.ts)].filter(Boolean);
+        return `<div class="mp-row ${c.ok ? "" : "fail"} ${seenCall && c.seq > seenCall ? "fresh" : ""}" style="--c:${color}">
+          <div><div class="mp-title">${esc(META_WHAT[c.purpose] || c.purpose)}${c.result ? `<em>→ ${esc(c.result)}</em>` : ""}</div>
+          <div class="mp-meta"><span class="m">${esc(name)}</span> · ${esc(facts.join(" · "))}</div></div>
+          <div class="mp-time">${c.ok ? `<div class="mp-bar"><i style="width:${Math.max(4, c.ms / longest * 100)}%"></i></div>${secs(c.ms)}` : "failed"}</div></div>`;
+      }).join("");
     }
-    seenMeta = m.seq;
+    seenCall = Math.max(seenCall, ...m.calls.map((c) => c.seq), 0) || -1;
   } catch (e) { /* next poll */ }
 }
 loadMeta(null);

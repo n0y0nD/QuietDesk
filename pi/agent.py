@@ -32,6 +32,13 @@ def create(purpose: str = "Lumi", **kwargs):
         usage = getattr(resp, "usage", None)
         if usage is not None:
             t.detail = f"{getattr(usage, 'input_tokens', '?')} in / {getattr(usage, 'output_tokens', '?')} out tokens"
+            t.tokens = int(getattr(usage, "total_tokens", 0) or 0)
+        tools_used = [o.name for o in (getattr(resp, "output", None) or [])
+                      if getattr(o, "type", "") == "function_call"]
+        if tools_used:  # shown on the panel as what Muse Spark decided to do
+            t.result = "chose to: " + ", ".join(dict.fromkeys(n.replace("_", " ") for n in tools_used))
+        elif purpose == "Lumi":
+            t.result = "wrote the answer"
     return resp
 
 
