@@ -4,6 +4,25 @@ A voice-first AI companion on a Raspberry Pi 5 that helps you keep your phone ou
 
 Built for the **Meta Global AI Developer Hackathon 2026**.
 
+## What I built during the hackathon, and what I used
+
+All code in this repository was written during the hackathon (it started Oct 26; the first commit is Oct 30, 2026). Every AI model QuietDesk calls is a Meta model.
+
+**Built during the hackathon (my work):**
+- **Lumi, the agent**: Muse Spark with tool calling for notes, reminders, missed messages, reply drafts, focus sessions, auto-replies, focus score, phone music, focus sounds, find my phone and clearing notifications.
+- **Message sorting**: each phone notification goes to Muse Spark, which decides urgent or digest and drafts a reply. Only messaging apps are sent, and OTPs and passwords are filtered out first.
+- **The "yes" safety check, in code**: a reply goes out only after Lumi has read the draft aloud and you said yes in your next turn.
+- **Focus sessions**: countdown, auto-replies (one per person, marked as auto-replies), the digest when focus ends, and the daily focus score.
+- **The desk device**: wiring of the button, the two LEDs (one breathes while messages wait) and the OLED; Lumi's animated screens (face, clock, app logos, focus ring, alerts), drawn in code at 30 fps.
+- **Phone integration code**: reading notifications, replying, clearing, ringing, music control and battery, all through KDE Connect's D-Bus interface.
+- **The QuietDesk window** on the laptop: push-to-talk with the laptop mic, focus sounds made in code, and the live "Meta AI" panel; plus auto-start on the Pi and the laptop.
+
+**Used, not built by me:**
+- **Meta AI models**: Muse Spark and Muse Voice Transcribe (Meta Model API), and MMS-TTS (open-source Meta model, runs on the Pi).
+- **Open-source software**: KDE Connect (phone link), PyTorch and transformers (to run MMS-TTS), Pillow and luma.oled (OLED drawing and driver), gpiozero (GPIO), dbus-python, python-dotenv, numpy, the `openai` client library (pointed at the Meta Model API), espeak-ng (backup voice), SQLite, the Nunito Sans font.
+- **Services and platforms**: Open-Meteo (weather API), Raspberry Pi OS and systemd, Microsoft Edge (app window), the browser's Web Audio and built-in local voices, SSH.
+- **Hardware**: Raspberry Pi 5, Waveshare 1.5" RGB OLED, button, LEDs, breadboard.
+
 ## What it does
 
 - **Your real phone, sorted by Muse Spark.** WhatsApp, Instagram, Gmail and other messages arrive from your Android phone over Wi-Fi (KDE Connect). Muse Spark decides for each one: *urgent now* or *saved for the digest*, and drafts a reply.
