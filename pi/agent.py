@@ -18,6 +18,15 @@ load_dotenv()
 MODEL = os.getenv("QUIETDESK_MODEL", "muse-spark-1.3")
 client = OpenAI(base_url="https://api.meta.ai/v1", api_key=os.environ["MODEL_API_KEY"])
 
+# How long Muse Spark thinks before answering. Desk tasks are short, and on a voice device speed
+# matters most: "minimal" answered in about 1.5 s in our tests vs about 7 s with the default.
+EFFORT = os.getenv("QUIETDESK_EFFORT", "minimal")
+
+
+def create(**kwargs):
+    """Responses API call with QuietDesk's reasoning effort."""
+    return client.responses.create(reasoning={"effort": EFFORT}, **kwargs)
+
 
 def instructions() -> str:
     now = datetime.now().strftime("%A %Y-%m-%d %H:%M")
@@ -38,52 +47,54 @@ def instructions() -> str:
     )
 
 
-class Agent:
-    def __init__(self):
-        self.last_response_id = None  # lets the API remember the conversation
-        self.mood = "neutral"  # tone Muse Spark picked for the last reply
+KEEP_TURNS = 6  # how many past questions (with their tool calls) QuietDesk remembers
 
-    def ask(self, user_text: str) -> str:
-        self.tool_log = []  # tool calls made for this question, shown on the web page
+
+class Agent:
+    """Muse Spark with tools. The conversation is kept here on the Pi and sent with each call:
+    in our tests that was 2-10x faster and more reliable than the API's previous_response_id."""
+
+    def __init__(self):
+        self.turns = []  # each turn = list of input items: user message, tool calls, tool results, reply
+        self.mood = "neutral"  # tone Muse Spark picked for the last reply
+        self.tool_log = []
+
+    def reset(self) -> None:
+        self.turns = []
+
+    def _call(self, items: list):
+        history = [item for turn in self.turns[-KEEP_TURNS:] for item in turn]
+        kwargs = dict(model=MODEL, instructions=instructions(), input=history + items, tools=TOOL_SPECS)
         try:
-            resp = client.responses.create(
-                model=MODEL,
-                instructions=instructions(),
-                input=user_text,
-                tools=TOOL_SPECS,
-                previous_response_id=self.last_response_id,
-            )
+            return create(**kwargs)
         except APIStatusError as e:
             if e.status_code < 500:
                 raise
-            # Server-side hiccup (e.g. 503): try once more as a fresh conversation, so a demo keeps going.
-            print(f"  API {e.status_code}, retrying without conversation history")
-            time.sleep(1)
-            resp = client.responses.create(
-                model=MODEL, instructions=instructions(), input=user_text, tools=TOOL_SPECS
-            )
+            print(f"  API {e.status_code}, retrying once")  # server hiccup: keep the demo going
+            time.sleep(0.5)
+            return create(**kwargs)
+
+    def ask(self, user_text: str) -> str:
+        self.tool_log = []  # tool calls made for this question, shown on the web page
+        turn = [{"role": "user", "content": user_text}]
+        resp = self._call(turn)
         for _ in range(5):  # at most 5 rounds of tool calls
             calls = [item for item in resp.output if item.type == "function_call"]
             if not calls:
                 break
-            outputs = []
             for call in calls:
                 args = json.loads(call.arguments or "{}")
                 result = run_tool(call.name, args)
                 print(f"  [tool] {call.name}({args}) -> {result}")
                 self.tool_log.append({"name": call.name, "args": args})
-                outputs.append(
-                    {"type": "function_call_output", "call_id": call.call_id, "output": json.dumps(result)}
-                )
-            resp = client.responses.create(
-                model=MODEL,
-                instructions=instructions(),
-                input=outputs,
-                tools=TOOL_SPECS,
-                previous_response_id=resp.id,
-            )
-        self.last_response_id = resp.id
-        self.mood, reply = split_mood(resp.output_text)
+                turn.append({"type": "function_call", "call_id": call.call_id,
+                             "name": call.name, "arguments": call.arguments or "{}"})
+                turn.append({"type": "function_call_output", "call_id": call.call_id, "output": json.dumps(result)})
+            resp = self._call(turn)
+        text = resp.output_text
+        turn.append({"role": "assistant", "content": text})
+        self.turns.append(turn)
+        self.mood, reply = split_mood(text)
         return reply
 
 

@@ -169,7 +169,7 @@ class Handler(BaseHTTPRequestHandler):
 
             if self.path == "/api/reset":  # clean slate between demo takes
                 tools.clear_notifications()
-                agent.last_response_id = None
+                agent.reset()
                 refresh_counts()
                 hw.set_reply("Hold the button and talk.")
                 hw.set_state("ready")

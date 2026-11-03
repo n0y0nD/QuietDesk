@@ -94,42 +94,48 @@ def _load():
 _synth_lock = threading.Lock()  # mood settings live on the shared model, so one synthesis at a time
 
 
-def _mms_wav(text: str, mood: str = "neutral") -> bytes:
-    """MMS-TTS with a mood. MMS ignores punctuation, so we speak phrase by phrase and add pauses,
-    and we raise or lower the pitch by resampling (the speaking rate is adjusted to make up for it)."""
+MMS_RATE = 16000  # MMS-TTS output sample rate
+
+
+def _mms_phrases(text: str, mood: str = "neutral"):
+    """MMS-TTS with a mood, one phrase at a time (yields 16 kHz 16-bit PCM bytes per phrase).
+
+    MMS ignores punctuation, so we speak phrase by phrase and add the pauses ourselves, and we
+    raise or lower the pitch by resampling (the speaking rate is adjusted to make up for it).
+    Yielding per phrase lets playback start as soon as the first phrase is ready."""
     import numpy as np
     import torch
 
     m = MOODS.get(mood, MOODS["neutral"])
     model, tokenizer = _load()
-    sr = model.config.sampling_rate
-    parts = [p for p in re.split(r"(?<=[,;:.!?])\s+", text.strip()) if p]
-    pieces = []
-    with _synth_lock:
-        model.speaking_rate = m["rate"] / m["pitch"]  # resampling below speeds it up by `pitch`
-        model.noise_scale = m["noise"]
-        model.noise_scale_duration = m["dur"]
-        for i, phrase in enumerate(parts):
-            inputs = tokenizer(normalize(phrase), return_tensors="pt")
-            if inputs["input_ids"].shape[-1] == 0:
-                continue
+    for i, phrase in enumerate(p for p in re.split(r"(?<=[,;:.!?])\s+", text.strip()) if p):
+        inputs = tokenizer(normalize(phrase), return_tensors="pt")
+        if inputs["input_ids"].shape[-1] == 0:
+            continue
+        with _synth_lock:
+            model.speaking_rate = m["rate"] / m["pitch"]  # resampling below speeds it up by `pitch`
+            model.noise_scale = m["noise"]
+            model.noise_scale_duration = m["dur"]
             torch.manual_seed(i)  # same text and mood, same voice every time
             with torch.no_grad():
-                pieces.append(model(**inputs).waveform[0].numpy())
-            gap = m["pause"][1] if phrase[-1] in ".!?" else m["pause"][0]
-            pieces.append(np.zeros(int(sr * gap * m["pitch"]), dtype=np.float32))
-    if not pieces:
+                audio = model(**inputs).waveform[0].numpy()
+        gap = m["pause"][1] if phrase[-1] in ".!?" else m["pause"][0]
+        audio = np.concatenate([audio, np.zeros(int(MMS_RATE * gap * m["pitch"]), dtype=np.float32)])
+        if m["pitch"] != 1.0:  # play the samples faster/slower = higher/lower voice
+            n = len(audio)
+            audio = np.interp(np.linspace(0, n - 1, int(n / m["pitch"])), np.arange(n), audio)
+        yield (np.clip(audio, -1, 1) * 32767).astype("<i2").tobytes()
+
+
+def _mms_wav(text: str, mood: str = "neutral") -> bytes:
+    pcm = b"".join(_mms_phrases(text, mood))
+    if not pcm:
         return b""
-    audio = np.concatenate(pieces)
-    if m["pitch"] != 1.0:  # play the samples faster/slower = higher/lower voice
-        n = len(audio)
-        audio = np.interp(np.linspace(0, n - 1, int(n / m["pitch"])), np.arange(n), audio).astype(np.float32)
-    pcm = (audio.clip(-1, 1) * 32767).astype("<i2").tobytes()
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
-        w.setframerate(model.config.sampling_rate)
+        w.setframerate(MMS_RATE)
         w.writeframes(pcm)
     return buf.getvalue()
 
@@ -198,26 +204,48 @@ def _play_wav(data: bytes) -> None:
         os.unlink(path)
 
 
-def play(text: str, mood: str = "neutral") -> None:
-    """Speak on the Pi's own speaker (default audio output, e.g. the paired Bluetooth speaker).
-
-    Sentence by sentence: the first sentence starts playing while the next one is generated,
-    so the user hears the reply sooner.
-    """
-    sentences = [s for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s]
-    if not sentences:
-        return
-    ready = queue.Queue(maxsize=2)
+def _stream_mms(text: str, mood: str) -> None:
+    """Play MMS speech as one continuous audio stream: phrase 1 plays while phrase 2 is generated."""
+    ready = queue.Queue(maxsize=4)
 
     def produce():
-        for s in sentences:
-            ready.put(wav_bytes(s, mood))
-        ready.put(None)
+        try:
+            for pcm in _mms_phrases(text, mood):
+                ready.put(pcm)
+        finally:
+            ready.put(None)
 
     threading.Thread(target=produce, daemon=True).start()
-    while (data := ready.get()) is not None:
-        if data:
-            _play_wav(data)
+    # pw-cat in raw mode reads audio from stdin and plays it on the default (Bluetooth) speaker.
+    cmd = ["pw-cat", "--playback", "--raw", "--rate", str(MMS_RATE), "--channels", "1", "--format", "s16", "-"]
+    player = None
+    try:
+        while (pcm := ready.get()) is not None:
+            if player is None:  # start the player only when there is sound to play
+                player = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+            player.stdin.write(pcm)
+            player.stdin.flush()
+    finally:
+        if player is not None:
+            player.stdin.close()
+            player.wait()
+
+
+def play(text: str, mood: str = "neutral") -> None:
+    """Speak on the Pi's own speaker (default audio output, e.g. the paired Bluetooth speaker).
+    With MMS the reply is streamed phrase by phrase, so it starts after about one phrase of work."""
+    if not text or not text.strip():
+        return
+    if VOICE == "mms":
+        try:
+            return _stream_mms(text, mood)
+        except Exception as e:
+            print(f"  MMS streaming failed, using espeak-ng: {e}")
+            data = _espeak_wav(text)
+    else:
+        data = wav_bytes(text, mood)
+    if data:
+        _play_wav(data)
 
 
 def _chime_wav() -> bytes:

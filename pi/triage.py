@@ -3,7 +3,7 @@ import json
 import re
 from datetime import datetime
 
-from agent import MODEL, client
+from agent import MODEL, create
 
 TRIAGE_INSTRUCTIONS = (
     "You sort phone notifications for someone in a focused work session whose phone is out of reach. "
@@ -33,7 +33,7 @@ def _parse(text: str) -> dict:
 
 def classify(app: str, sender: str, text: str) -> dict:
     now = datetime.now().strftime("%A %H:%M")
-    resp = client.responses.create(
+    resp = create(
         model=MODEL,
         instructions=TRIAGE_INSTRUCTIONS,
         input=f"Time: {now}\nApp: {app}\nFrom: {sender}\nMessage: {text}",
