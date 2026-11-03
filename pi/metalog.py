@@ -53,6 +53,16 @@ class timed:
         return False
 
 
+def clear() -> None:
+    """Empty the panel (the Reset button, between demo takes)."""
+    global seq
+    with _lock:
+        _calls.clear()
+        totals.clear()
+        stats.clear()
+        seq += 1
+
+
 def snapshot() -> dict:
     with _lock:
         return {"seq": seq, "totals": dict(totals), "stats": {k: dict(v) for k, v in stats.items()},

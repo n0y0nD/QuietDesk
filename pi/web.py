@@ -407,6 +407,7 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == "/api/reset":  # clean slate between demo takes
                 tools.clear_notifications()
                 agent.reset()
+                metalog.clear()  # the live Meta AI panel starts empty too
                 refresh_counts()
                 hw.set_reply("")  # back to the face
                 hw.set_state("ready")

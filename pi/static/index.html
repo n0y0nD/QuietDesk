@@ -522,6 +522,8 @@ async function loadMeta(seq) {
   lastMeta = seq;
   try {
     const m = await (await fetch("/api/meta")).json();
+    if (m.seq < (loadMeta.prev || 0)) seenCall = -1;  // the Pi restarted: its call numbers start again
+    loadMeta.prev = m.seq;
     const all = Object.values(m.stats || {});
     const calls = all.reduce((a, s) => a + s.calls, 0), tokens = all.reduce((a, s) => a + s.tokens, 0);
     const avg = calls ? all.reduce((a, s) => a + s.ms, 0) / calls : 0;
@@ -550,6 +552,8 @@ async function loadMeta(seq) {
           <div class="mp-meta"><span class="m">${esc(name)}</span> · ${esc(facts.join(" · "))}</div></div>
           <div class="mp-time">${c.ok ? `<div class="mp-bar"><i style="width:${Math.max(4, c.ms / longest * 100)}%"></i></div>${secs(c.ms)}` : "failed"}</div></div>`;
       }).join("");
+    } else {
+      $("#metaCalls").innerHTML = `<div class="empty">No calls yet. Hold the button and talk, or wait for a message.</div>`;
     }
     seenCall = Math.max(seenCall, ...m.calls.map((c) => c.seq), 0) || -1;
   } catch (e) { /* next poll */ }
@@ -608,7 +612,7 @@ $("#customForm").addEventListener("submit", (e) => {
 });
 
 $("#reset").addEventListener("click", async () => {
-  if (!confirm("Clear all notifications and start a fresh conversation?")) return;
+  if (!confirm("Clear all notifications, the Meta AI panel and the conversation, for a fresh start?")) return;
   await api("/api/reset");
   $("#log").innerHTML = "";
   refresh();
