@@ -257,6 +257,7 @@ def state() -> dict:
         "voice": True,
         "phone": phone.status(),
         "focus": focus.status(),
+        "weather": weather.current(),
     }
 
 
