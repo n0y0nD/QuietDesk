@@ -3,7 +3,8 @@
 Wiring (physical pin numbers):
   Button  : Pin 13 (GPIO27) and GND
   Green   : Pin 15 (GPIO22) -> 330 ohm -> LED -> GND   (listening / thinking)
-  White   : Pin 16 (GPIO23) -> 330 ohm -> LED -> GND   (urgent notification waiting)
+  Red     : Pin 16 (GPIO23) -> 330 ohm -> LED -> GND   (message light: steady when all is read,
+                                                        breathes while messages wait, faster if urgent)
   OLED    : VCC Pin 1, GND Pin 6, DIN Pin 19, CLK Pin 23, CS Pin 24, DC Pin 22 (GPIO25), RST Pin 18 (GPIO24)
 
 If the hardware or its libraries are missing, everything here quietly does nothing,
@@ -28,10 +29,11 @@ class Hardware:
         self._mood = "neutral"
         self._lock = threading.Lock()
         try:
-            from gpiozero import LED, Button
+            from gpiozero import LED, Button, PWMLED
 
             self.green = LED(22)
-            self.white = LED(23)
+            self.red = PWMLED(23)  # PWM so it can fade in and out ("breathing")
+            self.red.on()
             self.button = Button(27, bounce_time=0.05)
             self.button.when_pressed = self._pressed
             self.button.when_released = self._released
@@ -75,7 +77,12 @@ class Hardware:
             return
         self._urgent, self._digest = urgent, digest
         if self.ok:
-            self.white.on() if urgent else self.white.off()
+            if urgent:
+                self.red.pulse(fade_in_time=0.5, fade_out_time=0.5)  # quick breath: something urgent waits
+            elif digest:
+                self.red.pulse(fade_in_time=1.5, fade_out_time=1.5)  # slow breath: messages for later
+            else:
+                self.red.on()  # all read: steady light
         self._draw()
 
     def set_reply(self, text: str, mood: str = "neutral"):
@@ -105,4 +112,4 @@ class Hardware:
             self.oled.clear()
         if self.ok:
             self.green.off()
-            self.white.off()
+            self.red.off()

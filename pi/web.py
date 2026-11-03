@@ -66,7 +66,7 @@ hw = Hardware()  # button, LEDs and OLED on the desk (does nothing if they are n
 
 
 def refresh_counts() -> None:
-    """Show unhandled urgent/digest counts on the OLED; the white LED stays on while anything urgent waits."""
+    """Show unhandled urgent/digest counts on the OLED; the red LED breathes while messages wait (faster if urgent)."""
     new = [n for n in tools.all_notifications() if n["status"] == "new"]
     hw.set_counts(sum(n["urgency"] == "urgent" for n in new), sum(n["urgency"] == "digest" for n in new))
 

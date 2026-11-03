@@ -24,7 +24,7 @@ Every AI model in QuietDesk is a Meta model. The project calls no other AI model
 | Backup voice on the Pi if MMS-TTS fails | `espeak-ng`, the built-in Linux system voice (rule-based, not an AI model) |
 | Recording and playing audio | Browser mic and speakers on the laptop; ALSA / PipeWire on the Pi |
 | Optional speaker on the Pi | Bluetooth speaker paired to the Pi (BlueZ), with `QUIETDESK_SPEAK_ON=pi` |
-| Push-to-talk button and status LEDs | GPIO via `gpiozero` |
+| Push-to-talk button and status LEDs (green: listening / thinking; red: steady when all is read, breathes while messages wait) | GPIO via `gpiozero` (software PWM for the breathing) |
 | Status screen | Waveshare 1.5" RGB OLED over SPI |
 | Notes and reminders storage | SQLite |
 | Reading phone notifications and sending replies | [KDE Connect](https://kdeconnect.kde.org/) (open-source Android app + Linux daemon over Wi-Fi, no AI). QuietDesk reads it over D-Bus and replies through the phone app's own quick reply. A simulated phone on the web console is kept for testing, and its cards are labelled "simulated". |

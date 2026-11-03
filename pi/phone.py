@@ -51,7 +51,7 @@ class Phone:
 
     # ---- D-Bus helpers ----
     def _obj(self, path):
-        return self._bus.get_object(SERVICE, path)
+        return self._bus.get_object(SERVICE, path, introspect=False)  # no log spam while the phone is away
 
     def _find_phone(self):
         """First paired phone that is reachable right now, or None."""
