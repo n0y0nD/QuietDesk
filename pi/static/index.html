@@ -75,6 +75,14 @@
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
   .row2 ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
   .busy { color: var(--accent); font-size: 13px; }
+  .phone-status { font-size: 13px; padding: 8px 10px; border-radius: 8px; margin-bottom: 12px;
+                  border: 1px solid var(--line); background: #12151c; }
+  .phone-status.on { color: var(--ok); border-color: rgba(74,222,128,.35); }
+  .phone-status.off { color: var(--muted); }
+  details.sim { margin-bottom: 12px; }
+  details.sim summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+  .src { font-size: 11px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); }
+  .src.phone { color: var(--ok); border-color: rgba(74,222,128,.35); }
 </style>
 </head>
 <body>
@@ -111,15 +119,19 @@
   </section>
 
   <section>
-    <h2>Phone (simulated)</h2>
-    <div class="sub">Stands in for the Android companion app. Each notification is sorted by Muse Spark. Nothing is sent until you approve it.</div>
-    <div class="presets" id="presets"></div>
-    <form class="custom" id="customForm">
-      <input name="app" placeholder="App (e.g. WhatsApp)">
-      <input name="sender" placeholder="From">
-      <input name="text" placeholder="Message text" required>
-      <button class="btn">Send custom notification</button>
-    </form>
+    <h2>Phone</h2>
+    <div class="sub">Your real phone's notifications arrive here through KDE Connect. Muse Spark sorts each one. Nothing is sent until you approve it.</div>
+    <div id="phoneStatus" class="phone-status off">Phone: checking…</div>
+    <details class="sim">
+      <summary>Simulated phone (for testing without the phone)</summary>
+      <div class="presets" id="presets"></div>
+      <form class="custom" id="customForm">
+        <input name="app" placeholder="App (e.g. WhatsApp)">
+        <input name="sender" placeholder="From">
+        <input name="text" placeholder="Message text" required>
+        <button class="btn">Send custom notification</button>
+      </form>
+    </details>
     <div style="text-align:right;margin:-6px 0 10px"><button class="btn" id="reset" style="font-size:12px">Clear notifications</button></div>
     <div id="notifs"></div>
   </section>
@@ -334,6 +346,20 @@ document.addEventListener("keydown", (e) => {
 });
 document.addEventListener("keyup", (e) => { if (e.code === "Space" && recording) { e.preventDefault(); stopRec(); } });
 
+// New notifications from the real phone: refresh the list and read urgent ones out loud.
+let lastEvent = null;
+async function newEvents(seq) {
+  const first = lastEvent === null;
+  const after = lastEvent ?? seq;
+  lastEvent = seq;
+  if (first) return;  // page just opened: old alerts are not replayed
+  try {
+    const r = await (await fetch(`/api/events?after=${after}`)).json();
+    refresh();
+    for (const s of r.speech) if (!recording) await speak(s);
+  } catch (e) { /* try again on the next event */ }
+}
+
 // The red button on the desk is push-to-talk too: the page watches it and records with this laptop's mic.
 let deskHeld = false;
 setInterval(async () => {
@@ -341,6 +367,7 @@ setInterval(async () => {
     // Only the tab you are looking at answers the desk button, so two open tabs never both record and talk.
     if (document.visibilityState !== "visible") { deskHeld = false; return; }
     const h = await (await fetch("/api/hw")).json();
+    if (h.events !== lastEvent) newEvents(h.events);
     if (!h.hardware) return;
     if (h.down && !deskHeld) { deskHeld = true; startRec(); }
     else if (!h.down && deskHeld) { deskHeld = false; stopRec(); }
@@ -383,29 +410,35 @@ $("#reset").addEventListener("click", async () => {
 async function act(id, action) {
   const text = action === "send" ? document.getElementById("draft-" + id).value.trim() : "";
   if (action === "send" && !text) { alert("The reply is empty."); return; }
-  await api(`/api/notifications/${id}/${action}`, { text });
+  try { await api(`/api/notifications/${id}/${action}`, { text }); }
+  catch (e) { alert(e.message); }
   refresh();
 }
 
 function renderNotifs(list) {
   const el = $("#notifs");
   const busy = [...el.querySelectorAll(".busy")];
-  if (!list.length) { el.innerHTML = '<div class="empty">No notifications yet. Tap a sender above.</div>'; busy.forEach((b) => el.prepend(b)); return; }
+  if (!list.length) { el.innerHTML = '<div class="empty">No notifications yet. Messages on your phone show up here.</div>'; busy.forEach((b) => el.prepend(b)); return; }
   const open = {};
-  el.querySelectorAll("textarea").forEach((t) => (open[t.id] = t.value));  // keep what the user is typing
+  // Keep what the user typed, but show a new draft from QuietDesk if the user hasn't touched the box.
+  el.querySelectorAll("textarea").forEach((t) => { if (t.value !== t.dataset.draft) open[t.id] = t.value; });
   el.innerHTML = list.map((n) => {
     const done = n.status !== "new";
     const draftId = "draft-" + n.id;
+    const real = n.source === "phone";
+    const canSend = !real || n.reply_id;  // real messages need the app's quick reply (WhatsApp, Messages…)
     return `<div class="card ${n.urgency} ${done ? "done" : ""}">
-      <div class="top"><div><span class="from">${esc(n.sender)}</span> <span class="app">· ${esc(n.app)} · ${esc((n.received || "").slice(11))}</span></div>
+      <div class="top"><div><span class="from">${esc(n.sender)}</span> <span class="app">· ${esc(n.app)} · ${esc((n.received || "").slice(11))}</span>
+        <span class="src ${real ? "phone" : ""}">${real ? "real phone" : "simulated"}</span></div>
       <span class="badge ${n.urgency}">${esc(n.urgency)}</span></div>
       <div class="text">${esc(n.text)}</div>
       <div class="why">Muse Spark: ${esc(n.reason)}</div>
-      ${n.status === "sent" ? `<div class="sent">✓ Reply approved and sent: "${esc(n.reply)}"</div>` :
+      ${n.status === "sent" ? `<div class="sent">✓ Reply approved and ${real ? "sent from your phone" : "marked sent (simulated)"}: "${esc(n.reply)}"</div>` :
         n.status === "dismissed" ? `<div class="why">Dismissed</div>` : `
-        <div style="margin-top:8px"><textarea id="${draftId}" placeholder="No reply drafted. Type one, or ask QuietDesk to draft it.">${esc(open[draftId] ?? n.draft ?? "")}</textarea></div>
+        <div style="margin-top:8px"><textarea id="${draftId}" data-draft="${esc(n.draft ?? "")}" placeholder="No reply drafted. Type one, or ask QuietDesk to draft it.">${esc(open[draftId] ?? n.draft ?? "")}</textarea></div>
         <div class="actions">
-          <button class="btn primary" onclick="act(${n.id}, 'send')">Approve &amp; send</button>
+          ${canSend ? `<button class="btn primary" onclick="act(${n.id}, 'send')">Approve &amp; send</button>`
+                    : `<span class="why">${esc(n.app)} can't be answered from here. Reply on the phone.</span>`}
           <button class="btn" onclick="act(${n.id}, 'dismiss')">Dismiss</button>
         </div>`}
     </div>`;
@@ -417,6 +450,10 @@ async function refresh() {
   try {
     const s = await (await fetch("/api/state")).json();
     renderNotifs(s.notifications);
+    const ps = $("#phoneStatus");
+    ps.className = "phone-status " + (s.phone?.connected ? "on" : "off");
+    ps.textContent = s.phone?.connected ? `● ${s.phone.name} connected (KDE Connect)`
+      : "○ Phone not connected. Open KDE Connect on the phone, same Wi-Fi as the Pi.";
     $("#notes").innerHTML = s.notes.map((n) => `<li>${esc(n.text)}</li>`).join("") || "<li>None</li>";
     $("#reminders").innerHTML = s.reminders.map((r) => `<li>${esc(r.text)} — ${esc(r.due.replace("T", " "))}</li>`).join("") || "<li>None</li>";
     if (!s.voice) statusEl.textContent = "Ready (espeak-ng not installed on the Pi, replies are text only)";

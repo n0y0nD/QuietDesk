@@ -18,22 +18,50 @@ def _db():
         "id INTEGER PRIMARY KEY, app TEXT, sender TEXT, text TEXT, received TEXT, "
         "urgency TEXT, reason TEXT, draft TEXT, status TEXT DEFAULT 'new', reply TEXT)"
     )
+    _add_phone_columns(conn)
     return conn
+
+
+_migrated = False
+
+
+def _add_phone_columns(conn) -> None:
+    """Columns for real phone notifications (KDE Connect), added to older databases once."""
+    global _migrated
+    if _migrated:
+        return
+    have = {r[1] for r in conn.execute("PRAGMA table_info(notifications)")}
+    for col, kind in (("source", "TEXT DEFAULT 'demo'"), ("phone_id", "TEXT"), ("reply_id", "TEXT")):
+        if col not in have:
+            conn.execute(f"ALTER TABLE notifications ADD COLUMN {col} {kind}")
+    _migrated = True
 
 
 # ---- Phone notifications (relayed by the phone, sorted by Muse Spark) ----
 
-NOTIF_COLS = ["id", "app", "sender", "text", "received", "urgency", "reason", "draft", "status", "reply"]
+NOTIF_COLS = ["id", "app", "sender", "text", "received", "urgency", "reason", "draft", "status", "reply",
+              "source", "phone_id", "reply_id"]
 
 
-def add_notification(app: str, sender: str, text: str, urgency: str, reason: str, draft: str) -> int:
+def add_notification(app: str, sender: str, text: str, urgency: str, reason: str, draft: str,
+                     source: str = "demo", phone_id: str = None, reply_id: str = None) -> int:
+    """source: "demo" (simulated phone on the web page) or "phone" (real phone via KDE Connect).
+    reply_id: set when the phone says this notification can be answered (e.g. WhatsApp)."""
     with _db() as conn:
         cur = conn.execute(
-            "INSERT INTO notifications (app, sender, text, received, urgency, reason, draft) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (app, sender, text, datetime.now().isoformat(timespec="minutes"), urgency, reason, draft),
+            "INSERT INTO notifications (app, sender, text, received, urgency, reason, draft, "
+            "source, phone_id, reply_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (app, sender, text, datetime.now().isoformat(timespec="minutes"), urgency, reason, draft,
+             source, phone_id, reply_id or None),
         )
     return cur.lastrowid
+
+
+def get_notification(notification_id: int) -> dict:
+    with _db() as conn:
+        row = conn.execute(f"SELECT {', '.join(NOTIF_COLS)} FROM notifications WHERE id = ?",
+                           (notification_id,)).fetchone()
+    return dict(zip(NOTIF_COLS, row)) if row else None
 
 
 def all_notifications() -> list:
@@ -62,7 +90,10 @@ def get_missed_notifications(urgency: str = "all") -> dict:
         items = [n for n in items if n["urgency"] == urgency]
     return {
         "notifications": [
-            {k: n[k] for k in ("id", "app", "sender", "text", "received", "urgency", "draft")} for n in items
+            {**{k: n[k] for k in ("id", "app", "sender", "text", "received", "urgency", "draft")},
+             "from": "real phone" if n["source"] == "phone" else "simulated phone",
+             "can_reply": n["source"] != "phone" or bool(n["reply_id"])}
+            for n in items
         ]
     }
 
@@ -176,6 +207,18 @@ TOOL_SPECS = [
                 "text": {"type": "string", "description": "The reply text"},
             },
             "required": ["notification_id", "text"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "send_reply",
+        "description": "Send the saved draft for a notification. Only after you read that exact draft to the "
+        "user and asked whether to send it, and the user's newest message clearly says yes. "
+        "QuietDesk checks this and refuses otherwise.",
+        "parameters": {
+            "type": "object",
+            "properties": {"notification_id": {"type": "integer"}},
+            "required": ["notification_id"],
         },
     },
 ]

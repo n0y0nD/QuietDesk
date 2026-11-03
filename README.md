@@ -27,7 +27,7 @@ Every AI model in QuietDesk is a Meta model. The project calls no other AI model
 | Push-to-talk button and status LEDs | GPIO via `gpiozero` |
 | Status screen | Waveshare 1.5" RGB OLED over SPI |
 | Notes and reminders storage | SQLite |
-| Reading phone notifications | Android `NotificationListenerService` (OS API, no AI in the app); a simulated phone on the web console for the demo |
+| Reading phone notifications and sending replies | [KDE Connect](https://kdeconnect.kde.org/) (open-source Android app + Linux daemon over Wi-Fi, no AI). QuietDesk reads it over D-Bus and replies through the phone app's own quick reply. A simulated phone on the web console is kept for testing, and its cards are labelled "simulated". |
 | Mic for the web console | The browser's own mic (no AI) |
 | Calling the Meta Model API | `openai` Python SDK pointed at `https://api.meta.ai/v1` (client library only, no OpenAI models) |
 
@@ -37,8 +37,9 @@ QuietDesk needs an internet connection for Muse Spark and Muse Voice Transcribe.
 
 ```
 pi/        Python code that runs on the Raspberry Pi
-android/   Companion app that relays phone notifications (coming soon)
 ```
+
+The phone needs no custom app: it runs KDE Connect from the Play Store.
 
 ## Run it
 
@@ -52,6 +53,15 @@ sudo apt install -y espeak-ng
 .venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu
 .venv/bin/python test_api.py
 ```
+
+Real phone notifications (optional; without it the simulated phone still works):
+
+1. On the Pi: `sudo apt install -y kdeconnect`. It runs in the Pi's desktop session, so the Pi should boot to the desktop.
+2. On the Android phone: install **KDE Connect** from the Play Store, same Wi-Fi as the Pi.
+3. Pair from the Pi (`kdeconnect-cli --list-available`, then `kdeconnect-cli --pair -d <device id>`) and accept on the phone.
+4. In the phone app, open the Pi → **Notification sync** → allow notification access. On phones that close background apps, allow KDE Connect to run in the background.
+
+Only messaging apps are passed on (`QUIETDESK_PHONE_APPS` in `.env`, default WhatsApp, Messages, Telegram, Signal, Slack, Discord, Gmail, Instagram), and anything that looks like an OTP or password is never sent to the model. `QUIETDESK_PHONE=off` turns the phone link off.
 
 Web console (voice + notifications). The laptop browser is the mic and speaker; all AI runs on the Pi. From the laptop, run `open-quietdesk.ps1`, or by hand:
 
@@ -76,11 +86,15 @@ Other ways to run it on the Pi:
 | `pi/triage.py` | Muse Spark sorts each notification: urgent now or saved for the digest, plus a reply draft |
 | `pi/voice.py` | Push-to-talk: record → Muse Voice Transcribe → agent → spoken reply |
 | `pi/tts.py` | QuietDesk's voice: Meta MMS-TTS on the Pi, espeak-ng as backup |
-| `pi/web.py` | Web console on the Pi; the page stands in for the phone app in the demo |
+| `pi/phone.py` | Real phone link: new notifications from KDE Connect go to Muse Spark; approved replies go back through the phone |
+| `pi/web.py` | Web console on the Pi: push-to-talk, the phone's notifications, approve and send |
 | `pi/tools.py` | SQLite storage and the tool definitions |
 
-The agent can draft replies but can never send them. Every reply waits on the screen until the user approves it.
+Nothing is sent without the user's yes. A reply goes out in one of two ways:
+
+- **On screen:** the user edits the draft and presses "Approve & send".
+- **By voice:** QuietDesk reads the draft out loud and asks "Should I send it?", then sends only if the user's next words say yes. That check is in code (`agent.py`), not left to the model: the draft must have been read out in the previous reply, the answer must contain a yes and no "no", and a draft can never be sent in the same turn it was written.
 
 ## Hardware
 
-Raspberry Pi 5, Waveshare 1.5" RGB OLED (SPI), Bluetooth speaker (boAt Stone 350 Pro), push-to-talk button, two status LEDs. The laptop browser is the mic for now. `QuietDesk_Components_List.pdf` has the original parts list.
+Raspberry Pi 5, Waveshare 1.5" RGB OLED (SPI), Bluetooth speaker (boAt Stone 350 Pro), push-to-talk button, two status LEDs, and the user's Android phone (KDE Connect). The laptop browser is the mic for now. `QuietDesk_Components_List.pdf` has the original parts list.

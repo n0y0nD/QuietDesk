@@ -40,8 +40,12 @@ def instructions() -> str:
         "stressed; [serious] for urgent warnings and deadlines; [neutral] for everything else. "
         "The tag is removed before the user sees or hears the reply. Use the tools to save notes and "
         "create or read reminders, read missed phone notifications, and draft replies. "
-        "You can never send a message yourself: drafts wait on the screen until the user "
-        "approves them, so say the draft is ready for review. "
+        "Replying to a message always takes two steps. Step one: call draft_reply, then say who it is for "
+        "and read the draft word for word, and ask if you should send it, e.g. 'Draft for Rahul: I am busy, "
+        "will call later. Should I send it?'. Step two, only in your next turn and only if the user clearly "
+        "says yes: call send_reply. If they want changes, draft again and ask again. Never send in the same "
+        "turn you drafted. If it is unclear which message the user means, ask (name the senders). "
+        "Prefer messages from the real phone over the simulated phone. "
         "Reply in the user's language (English or Hinglish). "
         f"Current local time: {now}."
     )
@@ -49,18 +53,45 @@ def instructions() -> str:
 
 KEEP_TURNS = 6  # how many past questions (with their tool calls) QuietDesk remembers
 
+# Sending a message by voice needs a clear yes from the user, checked here in code (not left to the model).
+YES = re.compile(r"\b(yes|yeah|yep|yup|haan?|haa|ha|ji|send|sent|bhej\w*|ok|okay|sure|go ahead|kar do|do it)\b", re.I)
+NO = re.compile(r"\b(no|nope|nahi|nahin|nhi|mat|don'?t|cancel|wait|ruko|stop|change|badal\w*)\b", re.I)
+
 
 class Agent:
     """Muse Spark with tools. The conversation is kept here on the Pi and sent with each call:
-    in our tests that was 2-10x faster and more reliable than the API's previous_response_id."""
+    in our tests that was 2-10x faster and more reliable than the API's previous_response_id.
 
-    def __init__(self):
+    `send` is a function(notification_id, text) that really sends a reply; without it QuietDesk can only draft."""
+
+    def __init__(self, send=None):
         self.turns = []  # each turn = list of input items: user message, tool calls, tool results, reply
         self.mood = "neutral"  # tone Muse Spark picked for the last reply
         self.tool_log = []
+        self.send = send
+        self.offered = {}  # drafts read to the user in the last reply: notification id -> draft text
 
     def reset(self) -> None:
         self.turns = []
+        self.offered = {}
+
+    def _send_reply(self, args: dict, user_text: str) -> dict:
+        """send_reply, guarded: the draft must have been read out in the previous reply, and the
+        user's newest message must say yes (and not no). Otherwise nothing is sent."""
+        nid = args.get("notification_id")
+        draft = self.offered.get(nid)
+        if draft is None:
+            return {"ok": False, "error": "Not sent. Draft the reply, read it to the user and ask first."}
+        if not YES.search(user_text) or NO.search(user_text):
+            return {"ok": False, "error": "Not sent: the user did not clearly say yes. Ask again."}
+        if self.send is None:
+            return {"ok": False, "error": "Sending is only available in the web console."}
+        try:
+            self.send(nid, draft)
+        except Exception as e:
+            return {"ok": False, "error": f"Not sent: {e}"}
+        del self.offered[nid]
+        return {"ok": True, "status": f"sent: {draft}"}
 
     def _call(self, items: list):
         history = [item for turn in self.turns[-KEEP_TURNS:] for item in turn]
@@ -77,6 +108,7 @@ class Agent:
     def ask(self, user_text: str) -> str:
         self.tool_log = []  # tool calls made for this question, shown on the web page
         turn = [{"role": "user", "content": user_text}]
+        drafted = {}  # drafts made in this turn; they can only be sent after the user hears them
         resp = self._call(turn)
         for _ in range(5):  # at most 5 rounds of tool calls
             calls = [item for item in resp.output if item.type == "function_call"]
@@ -84,7 +116,12 @@ class Agent:
                 break
             for call in calls:
                 args = json.loads(call.arguments or "{}")
-                result = run_tool(call.name, args)
+                if call.name == "send_reply":
+                    result = self._send_reply(args, user_text)
+                else:
+                    result = run_tool(call.name, args)
+                    if call.name == "draft_reply" and result.get("ok"):
+                        drafted[args.get("notification_id")] = args.get("text", "")
                 print(f"  [tool] {call.name}({args}) -> {result}")
                 self.tool_log.append({"name": call.name, "args": args})
                 turn.append({"type": "function_call", "call_id": call.call_id,
@@ -95,7 +132,13 @@ class Agent:
         turn.append({"role": "assistant", "content": text})
         self.turns.append(turn)
         self.mood, reply = split_mood(text)
+        # Only drafts this reply actually read out can be sent on the next "yes".
+        self.offered = {nid: d for nid, d in drafted.items() if d and _norm(d) in _norm(reply)}
         return reply
+
+
+def _norm(s: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
 
 
 MOODS = ("happy", "calm", "serious", "neutral")
