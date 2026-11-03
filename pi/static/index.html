@@ -86,7 +86,7 @@
 <main>
   <section>
     <h2>Desk</h2>
-    <div class="sub">Hold the red button (or the Space bar) and talk. Release to send.</div>
+    <div class="sub">Hold the button on the desk (or this red button, or the Space bar) and talk. Release to send.</div>
     <div class="talk-wrap">
       <button id="talk">HOLD<br>TO TALK</button>
       <div id="status">Ready</div>
@@ -179,22 +179,25 @@ async function ask(text) {
 }
 
 // ---------- Recording: mic -> 16 kHz mono 16-bit WAV (what Muse Voice Transcribe expects) ----------
-let ctx, stream, source, proc, chunks = [], recording = false;
+let ctx, stream, source, proc, chunks = [], recording = false, starting = false, stopAsked = false;
 
 async function startRec() {
-  if (recording) return;
+  if (recording || starting || $("#talk").disabled) return;
+  starting = true; stopAsked = false;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
-  } catch (e) { statusEl.textContent = "Mic blocked: " + e.message; return; }
+  } catch (e) { statusEl.textContent = "Mic blocked: " + e.message; starting = false; return; }
   ctx = new AudioContext();
   source = ctx.createMediaStreamSource(stream);
   proc = ctx.createScriptProcessor(4096, 1, 1);
   chunks = [];
   proc.onaudioprocess = (e) => chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
   source.connect(proc); proc.connect(ctx.destination);
-  recording = true;
+  recording = true; starting = false;
   $("#talk").classList.add("rec");
   statusEl.textContent = "Listening… release to send";
+  fetch("/api/listening", { method: "POST", headers: { "Content-Type": "application/json" }, body: '{"on":true}' }).catch(() => {});
+  if (stopAsked) stopRec();  // released before the mic was ready
 }
 
 function toWav16k(chunks, inRate) {
@@ -220,6 +223,7 @@ function toWav16k(chunks, inRate) {
 }
 
 async function stopRec() {
+  if (starting) { stopAsked = true; return; }
   if (!recording) return;
   recording = false;
   $("#talk").classList.remove("rec");
@@ -227,7 +231,11 @@ async function stopRec() {
   stream.getTracks().forEach((t) => t.stop());
   const rate = ctx.sampleRate; await ctx.close();
   const seconds = chunks.reduce((n, c) => n + c.length, 0) / rate;
-  if (seconds < 0.4) { statusEl.textContent = "Too short, hold the button while you talk."; return; }
+  if (seconds < 0.4) {
+    statusEl.textContent = "Too short, hold the button while you talk.";
+    fetch("/api/listening", { method: "POST", headers: { "Content-Type": "application/json" }, body: '{"on":false}' }).catch(() => {});
+    return;
+  }
   const wav = toWav16k(chunks, rate);
   $("#talk").disabled = true;
   statusEl.textContent = "Muse Voice Transcribe → Muse Spark…";
@@ -250,6 +258,17 @@ document.addEventListener("keydown", (e) => {
   if (e.code === "Space" && !e.repeat && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); startRec(); }
 });
 document.addEventListener("keyup", (e) => { if (e.code === "Space" && recording) { e.preventDefault(); stopRec(); } });
+
+// The red button on the desk is push-to-talk too: the page watches it and records with this laptop's mic.
+let deskHeld = false;
+setInterval(async () => {
+  try {
+    const h = await (await fetch("/api/hw")).json();
+    if (!h.hardware) return;
+    if (h.down && !deskHeld) { deskHeld = true; startRec(); }
+    else if (!h.down && deskHeld) { deskHeld = false; stopRec(); }
+  } catch (e) { /* Pi briefly unreachable; try again next tick */ }
+}, 120);
 
 $("#askForm").addEventListener("submit", (e) => { e.preventDefault(); const t = $("#askText").value.trim(); $("#askText").value = ""; ask(t); });
 document.querySelectorAll(".chips button").forEach((b) => b.addEventListener("click", () => ask(b.dataset.q)));

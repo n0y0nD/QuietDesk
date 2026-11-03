@@ -25,6 +25,7 @@ load_dotenv(Path(__file__).with_name(".env"))
 import tools  # noqa: E402
 import tts  # noqa: E402
 from agent import Agent  # noqa: E402
+from hardware import Hardware  # noqa: E402
 from triage import classify  # noqa: E402
 from voice import transcribe  # noqa: E402
 
@@ -41,11 +42,22 @@ SPEAK_ON = os.getenv("QUIETDESK_SPEAK_ON", "pi")
 speak_lock = threading.Lock()  # so two replies never talk over each other
 
 
+hw = Hardware()  # button, LEDs and OLED on the desk (does nothing if they are not there)
+
+
+def refresh_counts() -> None:
+    """Show unhandled urgent/digest counts on the OLED; the white LED stays on while anything urgent waits."""
+    new = [n for n in tools.all_notifications() if n["status"] == "new"]
+    hw.set_counts(sum(n["urgency"] == "urgent" for n in new), sum(n["urgency"] == "digest" for n in new))
+
+
 def _speak_on_pi(text: str, ding: bool, mood: str) -> None:
     with speak_lock:
+        hw.set_state("speaking")
         if ding:
             tts.chime()
         tts.play(text, mood)
+        hw.set_state("ready")
 
 
 def say(text: str, ding: bool = False, mood: str = "neutral") -> str:
@@ -60,10 +72,19 @@ def say(text: str, ding: bool = False, mood: str = "neutral") -> str:
 
 
 def ask_agent(text: str) -> dict:
-    with agent_lock:
-        reply = agent.ask(text)
-        used = list(agent.tool_log)
-        mood = agent.mood
+    hw.set_state("thinking")
+    try:
+        with agent_lock:
+            reply = agent.ask(text)
+            used = list(agent.tool_log)
+            mood = agent.mood
+    except Exception:
+        hw.set_state("ready")
+        raise
+    hw.set_reply(reply, mood)
+    refresh_counts()  # the agent may have drafted replies or read notifications
+    if SPEAK_ON != "pi":
+        hw.set_state("ready")
     return {"reply": reply, "mood": mood, "tools": used, "audio": say(reply, mood=mood)}
 
 
@@ -99,25 +120,36 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, INDEX.read_bytes(), "text/html; charset=utf-8")
         elif self.path == "/api/state":
             self._json(state())
+        elif self.path == "/api/hw":  # the page polls this to use the desk button as push-to-talk
+            self._json({"down": hw.button_down, "presses": hw.presses, "hardware": hw.ok})
         else:
             self._json({"error": "not found"}, 404)
 
     def do_POST(self):
         try:
             if self.path == "/api/voice":
+                hw.set_state("thinking")
                 with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
                     f.write(self._body())
                     wav = f.name
                 try:
                     heard = transcribe(wav)
+                except Exception:
+                    hw.set_state("ready")
+                    raise
                 finally:
                     os.unlink(wav)
                 if not heard:
                     msg = "Sorry, I didn't catch that."
+                    hw.set_reply(msg)
                     return self._json({"heard": "", "reply": msg, "tools": [], "audio": say(msg)})
                 return self._json({"heard": heard, **ask_agent(heard)})
 
             data = json.loads(self._body() or b"{}")
+
+            if self.path == "/api/listening":  # the on-screen button was pressed or released
+                hw.set_state("listening" if data.get("on") else "ready")
+                return self._json({"ok": True})
 
             if self.path == "/api/ask":
                 return self._json(ask_agent(str(data.get("text", "")).strip()))
@@ -128,14 +160,19 @@ class Handler(BaseHTTPRequestHandler):
                 text = str(data.get("text", "")).strip()
                 result = classify(app, sender, text)
                 nid = tools.add_notification(app, sender, text, **result)
+                refresh_counts()
                 audio = ""
                 if result["urgency"] == "urgent":
+                    hw.set_reply(f"Urgent: {sender} on {app}", "serious")
                     audio = say(f"Urgent message from {sender} on {app}.", ding=True, mood="serious")
                 return self._json({"id": nid, **result, "audio": audio})
 
             if self.path == "/api/reset":  # clean slate between demo takes
                 tools.clear_notifications()
                 agent.last_response_id = None
+                refresh_counts()
+                hw.set_reply("Hold the button and talk.")
+                hw.set_state("ready")
                 return self._json({"ok": True})
 
             m = re.fullmatch(r"/api/notifications/(\d+)/(send|dismiss)", self.path)
@@ -146,6 +183,7 @@ class Handler(BaseHTTPRequestHandler):
                     tools.set_notification_status(nid, "sent", str(data.get("text", "")).strip())
                 else:
                     tools.set_notification_status(nid, "dismissed")
+                refresh_counts()
                 return self._json({"ok": True})
 
             self._json({"error": "not found"}, 404)
@@ -160,4 +198,8 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     print(f"QuietDesk web console on http://localhost:{PORT} (open it through the SSH tunnel)")
     tts.warm_up()
-    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
+    refresh_counts()
+    try:
+        ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
+    finally:
+        hw.close()
