@@ -1,4 +1,4 @@
-"""QuietDesk desk hardware: push-to-talk button, two status LEDs and the 1.5" RGB OLED.
+"""QuietDesk desk hardware: push-to-talk button, two status LEDs and the animated 1.5" RGB OLED face.
 
 Wiring (physical pin numbers):
   Button  : Pin 13 (GPIO27) and GND
@@ -10,11 +10,13 @@ Wiring (physical pin numbers):
 If the hardware or its libraries are missing, everything here quietly does nothing,
 so the rest of QuietDesk still runs (for example on a laptop).
 """
-import textwrap
 import threading
+import time
 
-STATE_TEXT = {"ready": "Ready", "listening": "Listening...", "thinking": "Thinking...", "speaking": "Speaking"}
-MOOD_COLOR = {"happy": "yellow", "calm": "deepskyblue", "serious": "orangered", "neutral": "white"}
+import screen
+
+FPS = 30  # a frame takes ~3 ms to draw and send, so 30 fps is easy for the Pi
+ALERT_SECONDS = {"urgent": 15, "digest": 8, "reminder": 30, "focus": 12}  # how long each card stays
 
 
 class Hardware:
@@ -25,9 +27,13 @@ class Hardware:
         self._state = "ready"
         self._urgent = 0
         self._digest = 0
-        self._reply = "Hold the button and talk."
+        self._reply = ""
         self._mood = "neutral"
-        self._lock = threading.Lock()
+        self._reply_at = 0.0     # when the last reply arrived (it stays on screen for a while)
+        self._alert = None       # new message card: dict(app, sender, text, urgent, until)
+        self.info = None  # set by web.py: function returning phone, weather, reminder and focus details
+        self._wake = threading.Event()
+        self._running = True
         try:
             from gpiozero import LED, Button, PWMLED
 
@@ -49,7 +55,8 @@ class Hardware:
             self.oled = ssd1351(serial, width=128, height=128, bgr=True)
         except Exception as e:
             print(f"  hardware: OLED not available ({e})")
-        self._draw()
+        if self.oled is not None:
+            threading.Thread(target=self._screen_loop, daemon=True, name="oled").start()
 
     # ---- button ----
     def _pressed(self):
@@ -86,29 +93,49 @@ class Hardware:
         self._draw()
 
     def set_reply(self, text: str, mood: str = "neutral"):
-        self._reply, self._mood = text or "", mood
+        """Show QuietDesk's answer with eyes in Muse Spark's mood; it stays until read, then the face returns."""
+        self._reply, self._mood, self._reply_at = text or "", mood, time.monotonic()
+        self._alert = None
         self._draw()
 
-    # ---- OLED screen ----
-    def _draw(self):
-        if self.oled is None:
-            return
-        from luma.core.render import canvas
+    def show_alert(self, app: str, sender: str, text: str, urgent: bool = False, kind: str = "message"):
+        """A card for a few seconds: kind "message" (new phone message), "reminder" or "focus" (session ended)."""
+        secs = ALERT_SECONDS[kind if kind != "message" else ("urgent" if urgent else "digest")]
+        self._alert = dict(kind=kind, app=app, sender=sender, text=text, urgent=urgent,
+                           until=time.monotonic() + secs)
+        self._draw()
 
-        with self._lock, canvas(self.oled) as d:
-            d.text((4, 2), "QuietDesk", fill="white")
-            d.text((4, 16), STATE_TEXT.get(self._state, self._state),
-                   fill="lime" if self._state == "listening" else "cyan")
-            d.line((0, 30, 127, 30), fill="gray")
-            d.text((4, 35), f"Urgent: {self._urgent}", fill="orangered" if self._urgent else "gray")
-            d.text((70, 35), f"Digest: {self._digest}", fill="white" if self._digest else "gray")
-            d.line((0, 49, 127, 49), fill="gray")
-            color = MOOD_COLOR.get(self._mood, "white")
-            for i, line in enumerate(textwrap.wrap(self._reply, 20)[:6]):
-                d.text((4, 54 + i * 12), line, fill=color)
+    # ---- OLED screen: animated, drawn by screen.py ----
+    def _draw(self):
+        self._wake.set()  # redraw now instead of waiting for the next frame
+
+    def _snapshot(self) -> dict:
+        now = time.monotonic()
+        if self._alert and (now > self._alert["until"] or self._state == "listening"):
+            self._alert = None
+        words = len(self._reply.split())
+        reply_secs = min(25, 5 + 0.45 * words)  # long enough to read it
+        s = dict(self.info() or {}) if self.info else {}
+        s.update(state=self._state, urgent=self._urgent, digest=self._digest,
+                 mood=self._mood, reply=self._reply, reply_age=now - self._reply_at,
+                 show_reply=bool(self._reply) and now - self._reply_at < reply_secs, alert=self._alert)
+        return s
+
+    def _screen_loop(self):
+        start = time.monotonic()
+        while self._running:
+            try:
+                self.oled.display(screen.render(self._snapshot(), time.monotonic() - start))
+            except Exception as e:
+                print(f"  hardware: screen error ({e})")
+                time.sleep(1)
+            self._wake.wait(1 / FPS)
+            self._wake.clear()
 
     def close(self):
+        self._running = False
         if self.oled is not None:
+            time.sleep(2 / FPS)
             self.oled.clear()
         if self.ok:
             self.green.off()

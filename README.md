@@ -25,8 +25,10 @@ Every AI model in QuietDesk is a Meta model. The project calls no other AI model
 | Recording and playing audio | Browser mic and speakers on the laptop; ALSA / PipeWire on the Pi |
 | Optional speaker on the Pi | Bluetooth speaker paired to the Pi (BlueZ), with `QUIETDESK_SPEAK_ON=pi` |
 | Push-to-talk button and status LEDs (green: listening / thinking; red: steady when all is read, breathes while messages wait) | GPIO via `gpiozero` (software PWM for the breathing) |
-| Status screen | Waveshare 1.5" RGB OLED over SPI |
-| Notes and reminders storage | SQLite |
+| Desk screen (animated face, 12-hour clock, focus ring, message cards) | Waveshare 1.5" RGB OLED over SPI, frames drawn with Pillow at 30 fps |
+| Weather on the desk screen | [Open-Meteo](https://open-meteo.com/) weather API (free, no key, not an AI model); set `QUIETDESK_CITY` in `.env` |
+| Phone battery on the desk screen | KDE Connect battery plugin |
+| Notes, reminders and focus timer | SQLite and Python timers on the Pi; reminders ring at their time |
 | Reading phone notifications and sending replies | [KDE Connect](https://kdeconnect.kde.org/) (open-source Android app + Linux daemon over Wi-Fi, no AI). QuietDesk reads it over D-Bus and replies through the phone app's own quick reply. A simulated phone on the web console is kept for testing, and its cards are labelled "simulated". |
 | Mic for the web console | The browser's own mic (no AI) |
 | Calling the Meta Model API | `openai` Python SDK pointed at `https://api.meta.ai/v1` (client library only, no OpenAI models) |
@@ -88,7 +90,10 @@ Other ways to run it on the Pi:
 | `pi/tts.py` | QuietDesk's voice: Meta MMS-TTS on the Pi, espeak-ng as backup |
 | `pi/phone.py` | Real phone link: new notifications from KDE Connect go to Muse Spark; approved replies go back through the phone |
 | `pi/web.py` | Web console on the Pi: push-to-talk, the phone's notifications, approve and send |
-| `pi/tools.py` | SQLite storage and the tool definitions |
+| `pi/tools.py` | SQLite storage and the tool definitions (notes, reminders, notifications, drafts, focus) |
+| `pi/hardware.py`, `pi/screen.py` | Button, LEDs, and the animated OLED face (idle, focus, listening, thinking, reply, alerts) |
+| `pi/focus.py` | Focus sessions: only urgent messages interrupt; Muse Spark reads a digest when the session ends |
+| `pi/weather.py` | Current weather for the desk screen (Open-Meteo) |
 
 Nothing is sent without the user's yes. A reply goes out in one of two ways:
 

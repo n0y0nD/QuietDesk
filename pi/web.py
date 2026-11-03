@@ -15,6 +15,8 @@ import os
 import re
 import tempfile
 import threading
+import time
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -22,8 +24,10 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).with_name(".env"))
 
+import focus  # noqa: E402
 import tools  # noqa: E402
 import tts  # noqa: E402
+import weather  # noqa: E402
 from agent import Agent  # noqa: E402
 from hardware import Hardware  # noqa: E402
 from phone import Phone  # noqa: E402
@@ -128,8 +132,10 @@ def handle_notification(app: str, sender: str, text: str, source: str = "demo",
     nid = tools.add_notification(app, sender, text, **result, source=source, phone_id=phone_id, reply_id=reply_id)
     refresh_counts()
     speech = None
-    if result["urgency"] == "urgent":
-        hw.set_reply(f"Urgent: {sender} on {app}", "serious")
+    urgent = result["urgency"] == "urgent"
+    if urgent or not focus.status()["active"]:  # during focus only urgent ones interrupt
+        hw.show_alert(app, sender, text, urgent)  # message card on the OLED
+    if urgent:
         speech = say(f"Urgent message from {sender} on {app}.", ding=True, mood="serious")
     # The open page hears about it on its next poll; for real phone messages it also plays the alert,
     # since no page asked for this one (the simulated phone plays its own from the reply below).
@@ -159,6 +165,90 @@ def phone_notification(app, sender, text, phone_id, reply_id) -> None:
 phone = Phone(phone_notification)
 
 
+# ---- Desk screen details and timers, checked once a second ----
+
+desk_info = {}  # what the OLED shows besides the conversation: phone battery, weather, next reminder, focus
+hw.info = lambda: desk_info
+
+
+def _next_reminder():
+    """Today's next reminder, for the idle screen."""
+    now = datetime.now()
+    for r in tools.list_reminders()["reminders"]:
+        try:
+            due = datetime.fromisoformat(r["due"])
+        except ValueError:
+            continue
+        if due.date() == now.date() and due >= now:
+            return {"time": focus.clock(due.timestamp()), "text": r["text"]}
+    return None
+
+
+def _held_since(start: float) -> list:
+    """Messages that arrived during a focus session and are still waiting."""
+    since = datetime.fromtimestamp(start).isoformat(timespec="minutes")
+    return [n for n in tools.all_notifications() if n["status"] == "new" and (n["received"] or "") >= since]
+
+
+def _focus_info() -> dict:
+    f = focus.status()
+    if f["active"]:
+        held = _held_since(f["start"])
+        f.update(held=len(held), held_urgent=sum(n["urgency"] == "urgent" for n in held))
+    return f
+
+
+def on_reminder(r: dict) -> None:
+    due = focus.clock(datetime.fromisoformat(r["due"]).timestamp())
+    hw.show_alert("Reminder", r["text"], f"Now · {due}", kind="reminder")
+    add_event(say(f"Reminder: {r['text']}.", ding=True, mood="neutral"))
+
+
+def on_focus_done(s: dict) -> None:
+    held = _held_since(s["start"])
+    urgent = sum(n["urgency"] == "urgent" for n in held)
+    summary = (f"{len(held)} message{'s' if len(held) != 1 else ''} waiting"
+               + (f", {urgent} urgent." if urgent else ".")) if held else "Nothing new. Nice work!"
+    hw.show_alert("Focus", "Focus done", f"{s['minutes']} minutes. {summary}", kind="focus")
+
+    def digest():  # Muse Spark sums up what came in during the session, read out with a chime
+        time.sleep(4)  # let the "Focus done" card show first
+        try:
+            if SPEAK_ON == "pi":
+                tts.chime()
+            r = ask_agent(f"My {s['minutes']} minute focus session just ended. In one or two short sentences, "
+                          "say well done and tell me what I missed (check missed notifications, urgent first). "
+                          "Don't draft replies.")
+            if r["speech"]:
+                r["speech"]["ding"] = True
+            add_event(r["speech"])
+        except Exception as e:
+            print(f"  focus digest: {e}")
+
+    threading.Thread(target=digest, daemon=True).start()
+
+
+def ticker() -> None:
+    first = True
+    while True:
+        try:
+            done = focus.pop_finished()
+            if done:
+                on_focus_done(done)
+            for r in tools.due_reminders():
+                tools.mark_reminder_done(r["id"])
+                late = (datetime.now() - datetime.fromisoformat(r["due"])).total_seconds()
+                if not (first and late > 600):  # reminders long past while QuietDesk was off: skip quietly
+                    on_reminder(r)
+            st = phone.status()
+            desk_info.update(phone=st["connected"], battery=st["battery"], charging=st["charging"],
+                             weather=weather.current(), next_reminder=_next_reminder(), focus=_focus_info())
+        except Exception as e:
+            print(f"  ticker: {e}")
+        first = False
+        time.sleep(1)
+
+
 def state() -> dict:
     return {
         "notifications": tools.all_notifications(),
@@ -166,6 +256,7 @@ def state() -> dict:
         "reminders": tools.list_reminders()["reminders"],
         "voice": True,
         "phone": phone.status(),
+        "focus": focus.status(),
     }
 
 
@@ -260,7 +351,7 @@ class Handler(BaseHTTPRequestHandler):
                 tools.clear_notifications()
                 agent.reset()
                 refresh_counts()
-                hw.set_reply("Hold the button and talk.")
+                hw.set_reply("")  # back to the face
                 hw.set_state("ready")
                 return self._json({"ok": True})
 
@@ -292,6 +383,8 @@ if __name__ == "__main__":
     refresh_counts()
     if os.getenv("QUIETDESK_PHONE", "kdeconnect") != "off":
         phone.start()
+    weather.start()
+    threading.Thread(target=ticker, daemon=True, name="ticker").start()
     try:
         ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
     finally:

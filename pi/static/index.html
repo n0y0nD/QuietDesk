@@ -110,7 +110,10 @@
       <button class="btn" data-q="What did I miss?">What did I miss?</button>
       <button class="btn" data-q="Read my urgent notifications.">Urgent only</button>
       <button class="btn" data-q="What are my reminders?">My reminders</button>
+      <button class="btn" data-q="Start a 25 minute focus session.">Focus 25 min</button>
+      <button class="btn" data-q="Stop my focus session.">Stop focus</button>
     </div>
+    <div id="focusLine" class="sub" style="margin:-6px 0 12px"></div>
     <div id="log"></div>
     <div class="row2">
       <div><b>Notes</b><ul id="notes"></ul></div>
@@ -446,6 +449,14 @@ function renderNotifs(list) {
   busy.forEach((b) => el.prepend(b));
 }
 
+function when(iso) {  // "2026-11-03T17:00" -> "Today 5:00 PM"
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  const t = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const today = new Date().toDateString() === d.toDateString();
+  return (today ? "Today " : d.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" }) + ", ") + t;
+}
+
 async function refresh() {
   try {
     const s = await (await fetch("/api/state")).json();
@@ -455,7 +466,9 @@ async function refresh() {
     ps.textContent = s.phone?.connected ? `● ${s.phone.name} connected (KDE Connect)`
       : "○ Phone not connected. Open KDE Connect on the phone, same Wi-Fi as the Pi.";
     $("#notes").innerHTML = s.notes.map((n) => `<li>${esc(n.text)}</li>`).join("") || "<li>None</li>";
-    $("#reminders").innerHTML = s.reminders.map((r) => `<li>${esc(r.text)} — ${esc(r.due.replace("T", " "))}</li>`).join("") || "<li>None</li>";
+    $("#reminders").innerHTML = s.reminders.map((r) => `<li>${esc(r.text)} — ${esc(when(r.due))}</li>`).join("") || "<li>None</li>";
+    $("#focusLine").textContent = s.focus?.active
+      ? `● Focus session on until ${s.focus.ends_at}. Only urgent messages interrupt.` : "";
     if (!s.voice) statusEl.textContent = "Ready (espeak-ng not installed on the Pi, replies are text only)";
   } catch (e) { statusEl.textContent = "Can't reach the Pi: " + e.message; }
 }

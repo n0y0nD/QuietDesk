@@ -3,6 +3,8 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
+import focus
+
 DB_PATH = Path(__file__).with_name("quietdesk.db")
 
 
@@ -143,6 +145,32 @@ def list_reminders() -> dict:
     return {"reminders": [{"id": r[0], "text": r[1], "due": r[2]} for r in rows]}
 
 
+def due_reminders() -> list:
+    """Reminders whose time has come and that have not gone off yet."""
+    now = datetime.now()
+    due = []
+    for r in list_reminders()["reminders"]:
+        try:
+            if datetime.fromisoformat(r["due"]) <= now:
+                due.append(r)
+        except ValueError:
+            pass
+    return due
+
+
+def mark_reminder_done(reminder_id: int) -> None:
+    with _db() as conn:
+        conn.execute("UPDATE reminders SET done = 1 WHERE id = ?", (reminder_id,))
+
+
+def start_focus(minutes: int = 25) -> dict:
+    return focus.start(minutes)
+
+
+def stop_focus() -> dict:
+    return focus.stop()
+
+
 # Tool definitions in the Responses API format (flat: type, name, description, parameters).
 TOOL_SPECS = [
     {
@@ -221,6 +249,23 @@ TOOL_SPECS = [
             "required": ["notification_id"],
         },
     },
+    {
+        "type": "function",
+        "name": "start_focus",
+        "description": "Start a focus session timer (shown on the desk screen). During it only urgent "
+        "messages interrupt; the rest wait for a digest when it ends. Use when the user wants to focus, "
+        "study or work for a while.",
+        "parameters": {
+            "type": "object",
+            "properties": {"minutes": {"type": "integer", "description": "Length in minutes, default 25"}},
+        },
+    },
+    {
+        "type": "function",
+        "name": "stop_focus",
+        "description": "End the current focus session early.",
+        "parameters": {"type": "object", "properties": {}},
+    },
 ]
 
 TOOL_FUNCTIONS = {
@@ -230,6 +275,8 @@ TOOL_FUNCTIONS = {
     "list_reminders": list_reminders,
     "get_missed_notifications": get_missed_notifications,
     "draft_reply": draft_reply,
+    "start_focus": start_focus,
+    "stop_focus": stop_focus,
 }
 
 

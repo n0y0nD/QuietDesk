@@ -48,6 +48,9 @@ class Phone:
         self._bus = None
         self._error = None
         self._sent = []         # replies we sent: WhatsApp echoes them back as "You: ..."
+        self.battery = None     # phone battery %, read every few seconds
+        self.charging = False
+        self._battery_at = 0.0
 
     # ---- D-Bus helpers ----
     def _obj(self, path):
@@ -87,6 +90,8 @@ class Phone:
                 self.connected = self.device is not None
                 if self.connected:
                     self._poll()
+                    if time.time() - self._battery_at > 20:
+                        self._read_battery()
                     self._error = None
             except dbus.DBusException as e:  # daemon restarted or phone left the Wi-Fi: try again
                 self.connected = False
@@ -138,8 +143,23 @@ class Phone:
         notifs.sendReply(reply_id, text, dbus_interface=NOTIFS_IFACE)
         self._sent = (self._sent + [text])[-10:]
 
+    def _read_battery(self):
+        import dbus
+
+        self._battery_at = time.time()
+        try:
+            b = self._obj(f"{DAEMON_PATH}/devices/{self.device}/battery")
+            props = b.GetAll("org.kde.kdeconnect.device.battery", dbus_interface=PROPS_IFACE)
+            charge = int(props.get("charge", -1))
+            self.battery = charge if 0 <= charge <= 100 else None
+            self.charging = bool(props.get("isCharging", False))
+        except dbus.DBusException:
+            self.battery = None  # battery plugin off on the phone
+
     def status(self) -> dict:
-        return {"connected": self.connected, "name": self.name if self.connected else None}
+        on = self.connected
+        return {"connected": on, "name": self.name if on else None,
+                "battery": self.battery if on else None, "charging": self.charging and on}
 
 
 if __name__ == "__main__":

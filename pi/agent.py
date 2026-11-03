@@ -11,6 +11,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from openai import APIStatusError, OpenAI
 
+import focus
 from tools import TOOL_SPECS, run_tool
 
 load_dotenv()
@@ -46,9 +47,16 @@ def instructions() -> str:
         "says yes: call send_reply. If they want changes, draft again and ask again. Never send in the same "
         "turn you drafted. If it is unclear which message the user means, ask (name the senders). "
         "Prefer messages from the real phone over the simulated phone. "
-        "Reply in the user's language (English or Hinglish). "
-        f"Current local time: {now}."
+        "Reply in the user's language (English or Hinglish). Say times in 12-hour form like 4:30 PM. "
+        f"Current local time: {now}. {focus_line()}"
     )
+
+
+def focus_line() -> str:
+    f = focus.status()
+    if not f["active"]:
+        return "No focus session is running."
+    return f"A {f['minutes']} minute focus session is running, {f['left_seconds'] // 60} minutes left (ends {f['ends_at']})."
 
 
 KEEP_TURNS = 6  # how many past questions (with their tool calls) QuietDesk remembers
