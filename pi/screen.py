@@ -1,4 +1,4 @@
-"""QuietDesk's face on the 1.5" 128x128 RGB OLED: minimal animated screens drawn with Pillow.
+"""QuietDesk's face on the 1.5" 128x128 RGB OLED: minimal animated "glow" screens drawn with Pillow.
 
 render(state, t) returns one 128x128 frame; hardware.py shows 30 frames a second.
   idle      : blinking eyes, 12-hour clock, next reminder; phone battery and weather on top
@@ -9,23 +9,24 @@ render(state, t) returns one 128x128 frame; hardware.py shows 30 frames a second
   alert     : a new message, a reminder that is due, or the end of a focus session
 
 Shapes are drawn at 2x and scaled down (smooth edges); text is drawn at 1x so it stays sharp.
+Eyes and rings glow: they are drawn on their own layer, blurred, and added back under themselves.
 Preview without the OLED:  python screen.py   (writes PNGs and screen-preview.gif to ./preview)
 """
 import math
 from datetime import datetime
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 W = H = 128
 SS = 2  # supersampling for shapes
 BG = (0, 0, 0)
-TEXT = (236, 238, 243)
+TEXT = (240, 242, 246)
 MUTED = (112, 119, 134)
-FAINT = (40, 44, 52)
-ACCENT = (96, 205, 255)
+FAINT = (28, 32, 40)
+ACCENT = (110, 215, 255)
 RED = (255, 84, 84)
-GREEN = (80, 222, 140)
-AMBER = (255, 184, 77)
+GREEN = (90, 230, 150)
+AMBER = (255, 190, 90)
 VIOLET = (170, 145, 255)
 MOOD = {"happy": (255, 209, 102), "calm": (124, 199, 255), "serious": (255, 128, 96), "neutral": TEXT}
 APP_COLOR = {"whatsapp": (37, 211, 102), "whatsapp business": (37, 211, 102), "slack": (224, 30, 90),
@@ -120,6 +121,17 @@ class Pen:
             s = s[:-1]
         return s.rstrip() + "…"
 
+    def glow(self, draw, radius=6, strength=0.55):
+        """Run draw() on a fresh layer, then add a blurred copy of it (the glow) and the layer itself."""
+        layer = Image.new("RGB", self.big.size, BG)
+        self.d = ImageDraw.Draw(layer)
+        draw()
+        blur = layer.filter(ImageFilter.GaussianBlur(radius * SS))
+        if strength != 1.0:
+            blur = blur.point([int(v * strength) for v in range(256)] * 3)
+        self.big = ImageChops.add(ImageChops.add(self.big, blur), layer)
+        self.d = ImageDraw.Draw(self.big)
+
     def frame(self):
         img = self.big.resize((W, H), Image.LANCZOS)
         d = ImageDraw.Draw(img)
@@ -149,23 +161,26 @@ def glance(t: float) -> float:
     return a + (b - a) * k
 
 
-def eyes(p, cy, color, w=20, h=26, open_=1.0, dx=0.0, dy=0.0, mood="neutral", gap=44):
-    for cx in (64 - gap / 2 + dx, 64 + gap / 2 + dx):
-        if mood == "happy":  # smiling closed eyes ^ ^
-            y0 = cy + dy - h / 4
-            p.arc((cx - w / 2, y0, cx + w / 2, y0 + w), 195, 345, color, 3.5)
-            continue
-        top, bottom = cy + dy - h / 2, cy + dy + h / 2
-        if mood == "calm":
-            top = cy + dy - h / 6
-        hh = max(2.5, (bottom - top) * open_)
-        mid = (top + bottom) / 2
-        p.rrect((cx - w / 2, mid - hh / 2, cx + w / 2, mid + hh / 2), min(w * 0.38, hh / 2), color)
-        if mood == "serious" and open_ > 0.5:  # a slanted lid: focused
-            x0, x1 = cx - w / 2 - 1, cx + w / 2 + 1
-            low, high = top + h * 0.26, top - 1
-            inner_low = [(x1, low), (x0, high)] if cx < 64 else [(x1, high), (x0, low)]
-            p.polygon([(x0, top - 6), (x1, top - 6)] + inner_low, BG)
+def eyes(p, cy, color, w=16, h=28, open_=1.0, dx=0.0, dy=0.0, mood="neutral", gap=36, glow=0.55):
+    """Two glowing pill-shaped eyes. mood changes their shape; open_ < 1 is a blink."""
+    def draw():
+        for cx in (64 - gap / 2 + dx, 64 + gap / 2 + dx):
+            if mood == "happy":  # smiling closed eyes ^ ^
+                y0 = cy + dy - h / 4
+                p.arc((cx - w * 0.65, y0, cx + w * 0.65, y0 + w * 1.3), 200, 340, color, 3)
+                continue
+            top, bottom = cy + dy - h / 2, cy + dy + h / 2
+            if mood == "calm":  # relaxed, half closed
+                top = cy + dy - h / 8
+            hh = max(2.5, (bottom - top) * open_)
+            mid = (top + bottom) / 2
+            p.rrect((cx - w / 2, mid - hh / 2, cx + w / 2, mid + hh / 2), min(w / 2, hh / 2), color)
+            if mood == "serious" and open_ > 0.5:  # a slanted lid: focused
+                x0, x1 = cx - w / 2 - 1, cx + w / 2 + 1
+                low, high = top + h * 0.24, top - 1
+                inner_low = [(x1, low), (x0, high)] if cx < 64 else [(x1, high), (x0, low)]
+                p.polygon([(x0, top - 6), (x1, top - 6)] + inner_low, BG)
+    p.glow(draw, radius=6, strength=glow)
 
 
 # ---- small icons (drawn as shapes, so they scale cleanly) ----
@@ -212,34 +227,37 @@ def weather_icon(p, x, y, code, day):
 
 def status_row(p, s):
     """Top row, kept quiet: phone battery on the left, weather on the right."""
-    f = font(10, "SemiBold")
+    f = font(9, "SemiBold")
+    quiet = dim(MUTED, 0.9)
     if s.get("phone"):
         if s.get("battery") is not None:
-            battery_icon(p, 4, 4.5, s["battery"], s.get("charging"))
-            p.text((22, 1), f"{s['battery']}%", f, MUTED)
+            battery_icon(p, 5, 5, s["battery"], s.get("charging"))
+            p.text((23, 2), f"{s['battery']}%", f, quiet)
         else:
-            p.rrect((4, 3, 10, 13), 1.5, MUTED)
-            p.rrect((5, 4, 9, 12), 1, BG)
+            p.rrect((5, 3, 11, 13), 1.5, quiet)
+            p.rrect((6, 4, 10, 12), 1, BG)
     w = s.get("weather")
     if w:
         label = f"{w['temp']}°"
-        x = W - 4 - p.length(label, f)
-        p.text((x, 1), label, f, MUTED)
-        weather_icon(p, x - 14, 2.5, w["code"], w.get("day", True))
+        x = W - 5 - p.length(label, f)
+        p.text((x, 2), label, f, quiet)
+        weather_icon(p, x - 14, 3, w["code"], w.get("day", True))
 
 
 def counts(p, s, y):
-    """Tiny dots for waiting messages: red = urgent, grey = later. Nothing when all is read."""
+    """Tiny glowing dots for waiting messages: red = urgent, grey = later. Nothing when all is read."""
     items = [(n, c) for n, c in ((s.get("urgent", 0), RED), (s.get("digest", 0), MUTED)) if n]
     if not items:
         return
-    f = font(10, "Bold")
-    widths = [9 + p.length(str(n), f) for n, _ in items]
+    f = font(9, "Bold")
+    widths = [8 + p.length(str(n), f) for n, _ in items]
     x = 64 - (sum(widths) + 8 * (len(items) - 1)) / 2
+    dots = []
     for (n, c), w in zip(items, widths):
-        p.ellipse((x, y + 4, x + 5, y + 9), fill=c)
-        p.text((x + 8, y), str(n), f, c)
+        dots.append((x, c))
+        p.text((x + 7, y), str(n), f, c)
         x += w + 8
+    p.glow(lambda: [p.ellipse((dx, y + 4, dx + 4, y + 8), fill=c) for dx, c in dots], radius=3, strength=0.7)
 
 
 # ---- screens ----
@@ -247,23 +265,25 @@ def counts(p, s, y):
 def idle(p, s, t):
     status_row(p, s)
     urgent = s.get("urgent")
-    color = dim(RED, 0.7 + 0.3 * math.sin(t * math.pi)) if urgent else ACCENT
-    eyes(p, 37, color, open_=blink(t), dx=glance(t))
+    color = dim(RED, 0.75 + 0.25 * math.sin(t * math.pi)) if urgent else ACCENT
+    eyes(p, 40, color, open_=blink(t), dx=glance(t))
     now = s.get("now") or datetime.now()
     hm, ampm = clock(now)
-    fb, fs = font(32, "Bold"), font(11, "Bold")
-    total = p.length(hm, fb) + 3 + p.length(ampm, fs)
+    fb, fs = font(34, "Light"), font(10, "SemiBold")
+    total = p.length(hm, fb) + 4 + p.length(ampm, fs)
     x = (W - total) / 2
-    p.text((x, 56), hm, fb, TEXT)
-    p.text((x + p.length(hm, fb) + 3, 77), ampm, fs, MUTED)
+    p.text((x, 60), hm, fb, TEXT)
+    p.text((x + p.length(hm, fb) + 4, 83), ampm, fs, MUTED)
+    f = font(10, "Medium")
     r = s.get("next_reminder")
-    f = font(10, "SemiBold")
     if r:
-        p.ellipse((6, 102, 10, 106), fill=AMBER)
-        p.text((14, 97), p.fit(f"{r['time']} · {r['text']}", f, W - 18), f, MUTED)
+        line = p.fit(f"{r['time']} · {r['text']}", f, W - 22)
+        x = (W - p.length(line, f) - 8) / 2
+        p.glow(lambda: p.ellipse((x, 108, x + 4, 112), fill=AMBER), radius=3, strength=0.7)
+        p.text((x + 8, 103), line, f, MUTED)
     else:
-        p.center(97, now.strftime("%a, %d %b"), f, MUTED)
-    counts(p, s, 112)
+        p.center(103, now.strftime("%a, %-d %b"), f, MUTED)
+    counts(p, s, 116)
 
 
 def focus_screen(p, s, t):
@@ -271,48 +291,58 @@ def focus_screen(p, s, t):
     fo = s["focus"]
     total, left = fo["minutes"] * 60, fo["left_seconds"]
     frac = left / total if total else 0
-    cx, cy, r = 64, 60, 36
-    p.arc((cx - r, cy - r, cx + r, cy + r), 0, 360, FAINT, 4)
+    cx, cy, r = 64, 62, 38
+    box = (cx - r, cy - r, cx + r, cy + r)
+    p.arc(box, 0, 360, FAINT, 2)
     if frac > 0:
-        p.arc((cx - r, cy - r, cx + r, cy + r), -90, -90 + 360 * frac, VIOLET, 4)
-        a = math.radians(-90 + 360 * frac)  # a soft glowing dot at the end of the ring
+        a = math.radians(-90 + 360 * frac)
         gx, gy = cx + r * math.cos(a), cy + r * math.sin(a)
-        k = 0.75 + 0.25 * math.sin(t * 2.5)
-        p.ellipse((gx - 3.2, gy - 3.2, gx + 3.2, gy + 3.2), fill=dim((220, 205, 255), k))
+        k = 0.8 + 0.2 * math.sin(t * 2.5)
+
+        def ring():
+            p.arc(box, -90, -90 + 360 * frac, VIOLET, 3)
+            p.ellipse((gx - 3, gy - 3, gx + 3, gy + 3), fill=dim((225, 215, 255), k))
+        p.glow(ring, radius=5, strength=0.8)
     m, sec = divmod(left, 60)
-    p.center(cy - 15, f"{m}:{sec:02d}", font(22, "Bold"), TEXT)
-    p.center(cy + 9, "focus", font(10, "SemiBold"), MUTED)
+    p.center(cy - 17, f"{m}:{sec:02d}", font(26, "Light"), TEXT)
+    p.center(cy + 12, "FOCUS", font(9, "Bold"), dim(VIOLET, 0.85))
     held, urgent = fo.get("held", 0), fo.get("held_urgent", 0)
-    f = font(10, "SemiBold")
+    f = font(10, "Medium")
     if held:
-        p.center(108, f"{held} held back" + (f" · {urgent} urgent" if urgent else ""), f, RED if urgent else MUTED)
+        p.center(110, f"{held} held back" + (f" · {urgent} urgent" if urgent else ""), f, RED if urgent else MUTED)
     else:
-        p.center(108, "all quiet", f, dim(MUTED, 0.8))
+        p.center(110, "all quiet", f, dim(MUTED, 0.8))
 
 
 def listening(p, s, t):
-    eyes(p, 40, GREEN, w=22, h=30)
-    for i in range(11):
-        x = 21 + i * 8.2
-        h = 3 + 15 * abs(math.sin(t * 7 + i * 0.9)) * (0.5 + 0.5 * math.sin(t * 2.3 + i))
-        p.rrect((x, 88 - h / 2, x + 3.5, 88 + h / 2), 1.75, GREEN)
-    p.center(108, "Listening", font(11, "Bold"), GREEN)
+    eyes(p, 40, GREEN, w=18, h=32, glow=0.7)
+
+    def bars():
+        for i in range(11):
+            x = 22 + i * 8.2
+            h = 3 + 14 * abs(math.sin(t * 7 + i * 0.9)) * (0.5 + 0.5 * math.sin(t * 2.3 + i))
+            p.rrect((x, 88 - h / 2, x + 3, 88 + h / 2), 1.5, GREEN)
+    p.glow(bars, radius=4, strength=0.6)
+    p.center(108, "Listening", font(10, "SemiBold"), GREEN)
 
 
 def thinking(p, s, t):
-    eyes(p, 40, VIOLET, h=20, dx=5, dy=-5, open_=blink(t + 1.3))
-    for i in range(3):
-        y = 88 - 5 * max(0.0, math.sin(t * 6 - i * 0.9))
-        p.ellipse((52 + i * 10, y - 2.5, 57 + i * 10, y + 2.5), fill=VIOLET)
-    p.center(108, "Thinking", font(11, "Bold"), VIOLET)
+    eyes(p, 40, VIOLET, h=22, dx=4, dy=-5, open_=blink(t + 1.3))
+
+    def dots():
+        for i in range(3):
+            y = 88 - 5 * max(0.0, math.sin(t * 6 - i * 0.9))
+            p.ellipse((53 + i * 9, y - 2.2, 57.4 + i * 9, y + 2.2), fill=VIOLET)
+    p.glow(dots, radius=3, strength=0.7)
+    p.center(108, "Thinking", font(10, "SemiBold"), VIOLET)
 
 
 def reply(p, s, t):
     mood = s.get("mood", "neutral")
     color = MOOD.get(mood, TEXT)
-    eyes(p, 17, color, w=15, h=17, open_=blink(t), mood=mood, gap=34)
-    f = font(13, "SemiBold")
-    lines = p.wrap(s.get("reply", ""), f, W - 12)
+    eyes(p, 18, color, w=11, h=17, open_=blink(t), mood=mood, gap=26, glow=0.5)
+    f = font(13, "Medium")
+    lines = p.wrap(s.get("reply", ""), f, W - 14)
     line_h, top, rows = 17, 38, 5
     offset = 0
     if len(lines) > rows:  # long reply: scroll slowly after a short pause
@@ -320,7 +350,7 @@ def reply(p, s, t):
     for i, line in enumerate(lines):
         y = top + i * line_h - offset
         if top - 3 <= y <= H - line_h + 2:
-            p.text((6, y), line, f, color)
+            p.text((7, y), line, f, color)
 
 
 def alert(p, s, t):
@@ -328,32 +358,32 @@ def alert(p, s, t):
     kind = a.get("kind", "message")
     app = a.get("app", "Phone")
     color = APP_COLOR.get(app.lower(), ACCENT)
-    p.ellipse((6, 7, 12, 13), fill=color)
-    p.text((17, 3), app, font(11, "Bold"), color)
+    p.glow(lambda: p.ellipse((7, 8, 12, 13), fill=color), radius=3, strength=0.8)
+    p.text((17, 4), app, font(10, "Bold"), color)
     if a.get("urgent"):
-        k = 0.55 + 0.45 * math.sin(t * 2 * math.pi)
-        f = font(9, "ExtraBold")
+        k = 0.6 + 0.4 * math.sin(t * 2 * math.pi)
+        f = font(8, "ExtraBold")
         w = p.length("URGENT", f) + 10
-        p.rrect((W - 6 - w, 4, W - 6, 16), 6, dim(RED, k))
-        p.text((W - 1 - w, 4), "URGENT", f, TEXT)
+        p.glow(lambda: p.rrect((W - 6 - w, 5, W - 6, 16), 5.5, dim(RED, k)), radius=4, strength=0.7)
+        p.text((W - 1 - w, 5), "URGENT", f, TEXT)
     fb = font(16, "Bold")
-    title = p.wrap(a.get("sender", ""), fb, W - 12)
+    title = p.wrap(a.get("sender", ""), fb, W - 14)
     keep = 3 if kind == "reminder" else 1
     if len(title) > keep:
         title = title[:keep]
-        title[-1] = p.fit(title[-1] + " …", fb, W - 12)
-    y = 25
+        title[-1] = p.fit(title[-1] + " …", fb, W - 14)
+    y = 26
     for line in title:
-        p.text((6, y), p.fit(line, fb, W - 12), fb, TEXT)
+        p.text((7, y), p.fit(line, fb, W - 14), fb, TEXT)
         y += 20
-    f = font(12, "SemiBold" if kind != "message" else "Regular")
-    lines = p.wrap(a.get("text", ""), f, W - 12)
+    f = font(12, "Medium" if kind != "message" else "Regular")
+    lines = p.wrap(a.get("text", ""), f, W - 14)
     rows = max(1, (H - 4 - y - 2) // 15)
     if len(lines) > rows:
         lines = lines[:rows]
-        lines[-1] = p.fit(lines[-1] + " …", f, W - 12)
+        lines[-1] = p.fit(lines[-1] + " …", f, W - 14)
     for line in lines:
-        p.text((6, y + 2), line, f, dim(TEXT, 0.78) if kind == "message" else MUTED)
+        p.text((7, y + 2), line, f, dim(TEXT, 0.75) if kind == "message" else MUTED)
         y += 15
 
 
