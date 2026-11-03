@@ -1,8 +1,17 @@
 # QuietDesk
 
-A voice-first AI companion on a Raspberry Pi 5 that helps you keep your phone out of reach during focused work, without missing anything important.
+A voice-first AI companion on a Raspberry Pi 5 that helps you keep your phone out of reach during focused work, without missing anything important. Its voice and face are called **Lumi**.
 
 Built for the **Meta Global AI Developer Hackathon 2026**.
+
+## What it does
+
+- **Your real phone, sorted by Muse Spark.** WhatsApp, Instagram, Gmail and other messages arrive from your Android phone over Wi-Fi (KDE Connect). Muse Spark decides for each one: *urgent now* or *saved for the digest*, and drafts a reply.
+- **Push to talk.** Hold the button on the desk and ask: "What did I miss?", "Remind me to call Mom at 6", "Start a 45 minute focus session". Muse Voice Transcribe turns speech into text; Muse Spark answers with tools.
+- **Replies that need your yes.** Lumi reads a draft out loud and asks "Should I send it?". Only after you say yes does the reply go out from your phone (WhatsApp's own quick reply). Or edit and press "Approve & send" on the screen.
+- **Focus sessions.** A glowing ring on the desk screen counts down. Only urgent messages interrupt. If you say yes, Lumi tells people who message you that you're busy until a set time (one short auto-reply each, in their language, marked as an auto-reply). When the session ends, Lumi reads a digest and today's focus score.
+- **A desk you can glance at.** An animated face with glowing eyes, the time, your next reminder, the logos of apps with unread messages, phone battery and weather. A red light breathes while messages wait (faster if urgent).
+- **Reminders that ring** at their time, with a chime and a card on the screen.
 
 ## Meta AI models (every AI model call in QuietDesk)
 
@@ -26,89 +35,103 @@ Every AI model in QuietDesk is a Meta model. The project calls no other AI model
 | Recording and playing audio | Browser mic and speakers on the laptop; ALSA / PipeWire on the Pi |
 | Optional speaker on the Pi | Bluetooth speaker paired to the Pi (BlueZ), with `QUIETDESK_SPEAK_ON=pi` |
 | Push-to-talk button and status LEDs (green: listening / thinking; red: steady when all is read, breathes while messages wait) | GPIO via `gpiozero` (software PWM for the breathing) |
-| Desk screen (animated face, 12-hour clock, focus ring, message cards) | Waveshare 1.5" RGB OLED over SPI, frames drawn with Pillow at 30 fps |
+| Desk screen (Lumi's animated face, 12-hour clock, app logos, focus ring, message cards) | Waveshare 1.5" RGB OLED over SPI, frames drawn with Pillow at 30 fps. App logos are simple shapes drawn in code. |
 | Weather on the desk screen | [Open-Meteo](https://open-meteo.com/) weather API (free, no key, not an AI model); set `QUIETDESK_CITY` in `.env` |
 | Phone battery on the desk screen | KDE Connect battery plugin |
-| Notes, reminders and focus timer | SQLite and Python timers on the Pi; reminders ring at their time |
+| Notes, reminders, focus timer and focus score | SQLite and Python timers on the Pi; reminders ring at their time |
 | Reading phone notifications and sending replies | [KDE Connect](https://kdeconnect.kde.org/) (open-source Android app + Linux daemon over Wi-Fi, no AI). QuietDesk reads it over D-Bus and replies through the phone app's own quick reply. A simulated phone on the web console is kept for testing, and its cards are labelled "simulated". |
-| Mic for the web console | The browser's own mic (no AI) |
+| Starting by itself | systemd user service on the Pi; a small Edge window on the laptop at sign-in |
 | Calling the Meta Model API | `openai` Python SDK pointed at `https://api.meta.ai/v1` (client library only, no OpenAI models) |
 
 QuietDesk needs an internet connection for Muse Spark and Muse Voice Transcribe. The MMS-TTS voice runs offline on the Pi. Pick the voice from the "Voice" menu at the top of the web console.
 
+## Safety and privacy
+
+- **Nothing is sent without your yes.** On screen you press "Approve & send". By voice, Lumi reads the draft and asks first; the check is in code (`agent.py`), not left to the model: the draft must have been read out in the previous reply, your answer must contain a yes and no "no", and a draft is never sent in the same turn it was written.
+- **Auto-replies only after a yes**, only during a focus session, at most one per person, never to urgent messages, and always marked "(auto-reply from Lumi)".
+- **Only messaging apps reach the model** (`QUIETDESK_PHONE_APPS`), and anything that looks like an OTP or password is never sent to it.
+- The web console only listens on the Pi itself; the laptop reaches it through an SSH tunnel.
+
 ## Project layout
 
 ```
-pi/        Python code that runs on the Raspberry Pi
+pi/                        Python code that runs on the Raspberry Pi
+start-desk.ps1             Laptop: keeps the tunnel open and runs the hidden desk window (mic + speaker)
+install-desk-startup.ps1   Laptop: start the desk window at every Windows sign-in
+open-quietdesk.ps1         Laptop: open the full web console
 ```
 
 The phone needs no custom app: it runs KDE Connect from the Play Store.
 
 ## Run it
 
-On the Pi, once:
+**On the Pi** (Raspberry Pi OS trixie, Python 3.13), once:
 
 ```bash
 cd ~/quietdesk
-cp .env.example .env        # then paste your MODEL_API_KEY into .env
-sudo apt install -y espeak-ng
-.venv/bin/pip install openai python-dotenv transformers numpy
-.venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu
+sudo apt install -y espeak-ng python3-gpiozero python3-lgpio python3-rpi-lgpio python3-spidev python3-dbus
+sudo raspi-config nonint do_spi 0                     # turn on SPI for the OLED
+python3 -m venv --system-site-packages .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install torch==2.15.0 --index-url https://download.pytorch.org/whl/cpu
+.venv/bin/pip install --no-deps luma.oled==3.16.0 luma.core==2.6.0 smbus2==0.4.3 cbor2
+cp .env.example .env        # then paste your MODEL_API_KEY into .env (and QUIETDESK_CITY for weather)
 .venv/bin/python test_api.py
+./install-service.sh        # start QuietDesk now and at every boot (later: ./start-web.sh to restart, log in web.log)
 ```
 
-Real phone notifications (optional; without it the simulated phone still works):
+**Real phone** (optional; without it the simulated phone on the web console still works):
 
 1. On the Pi: `sudo apt install -y kdeconnect`. It runs in the Pi's desktop session, so the Pi should boot to the desktop.
 2. On the Android phone: install **KDE Connect** from the Play Store, same Wi-Fi as the Pi.
 3. Pair from the Pi (`kdeconnect-cli --list-available`, then `kdeconnect-cli --pair -d <device id>`) and accept on the phone.
 4. In the phone app, open the Pi → **Notification sync** → allow notification access. On phones that close background apps, allow KDE Connect to run in the background.
 
-Only messaging apps are passed on (`QUIETDESK_PHONE_APPS` in `.env`, default WhatsApp, Messages, Telegram, Signal, Slack, Discord, Gmail, Instagram), and anything that looks like an OTP or password is never sent to the model. `QUIETDESK_PHONE=off` turns the phone link off.
+`QUIETDESK_PHONE=off` in `.env` turns the phone link off.
 
-Start QuietDesk by itself when the Pi boots (systemd user service, no sudo):
+**On the laptop** (Windows, with SSH key access to the Pi):
 
-```bash
-./install-service.sh        # later restarts: ./start-web.sh, logs: web.log
-```
-
-Web console (voice + notifications). The laptop browser is the mic and speaker; all AI runs on the Pi. From the laptop, run `open-quietdesk.ps1`, or by hand:
+- Hands-free: run `start-desk.ps1`. It keeps the tunnel to the Pi open (and reconnects) and opens QuietDesk in a small Edge window in desk mode (`/?desk=1`), minimised. That window is QuietDesk's mic and speaker: press the button on the desk and talk. The first time, click "Allow" for the microphone. Run `install-desk-startup.ps1` once to start it at every Windows sign-in.
+- Full web console: run `open-quietdesk.ps1`, or by hand:
 
 ```bash
-ssh admin@raspberrypi5.local "~/quietdesk/start-web.sh"
 ssh -N -L 8000:localhost:8000 admin@raspberrypi5.local    # then open http://localhost:8000
 ```
-
-Hands-free on the laptop: `start-desk.ps1` keeps the tunnel to the Pi open (and reconnects) and opens QuietDesk in a small Edge window in desk mode (`/?desk=1`), minimised. That window is QuietDesk's mic and speaker: press the button on the desk and talk, nothing to open. Run `install-desk-startup.ps1` once to start it at every Windows sign-in. The first time, click "Allow" for the microphone in that window.
 
 Other ways to run it on the Pi:
 
 ```bash
-.venv/bin/python agent.py            # text chat in the terminal
-.venv/bin/python voice.py            # push-to-talk with a USB mic on the Pi
-.venv/bin/python voice.py --button   # same, with the GPIO27 button
+.venv/bin/python agent.py            # text chat with Lumi in the terminal
+.venv/bin/python voice.py --button   # push-to-talk with a USB mic on the Pi and the GPIO27 button
+.venv/bin/python screen.py           # preview every desk screen as PNGs and a GIF
 ```
 
 ## How it works
 
 | File | What it does |
 |---|---|
-| `pi/agent.py` | Muse Spark agent with tool calling (notes, reminders, missed notifications, reply drafts) |
-| `pi/triage.py` | Muse Spark sorts each notification: urgent now or saved for the digest, plus a reply draft |
-| `pi/voice.py` | Push-to-talk: record → Muse Voice Transcribe → agent → spoken reply |
-| `pi/tts.py` | QuietDesk's voice: Meta MMS-TTS on the Pi, espeak-ng as backup |
-| `pi/phone.py` | Real phone link: new notifications from KDE Connect go to Muse Spark; approved replies go back through the phone |
-| `pi/web.py` | Web console on the Pi: push-to-talk, the phone's notifications, approve and send |
-| `pi/tools.py` | SQLite storage and the tool definitions (notes, reminders, notifications, drafts, focus) |
-| `pi/hardware.py`, `pi/screen.py` | Button, LEDs, and the animated OLED face (idle, focus, listening, thinking, reply, alerts) |
-| `pi/focus.py` | Focus sessions: only urgent messages interrupt; optional auto-replies ("busy until 5:30 PM", written by Muse Spark in the sender's language, marked as an auto-reply, only after the user says yes); a digest and today's focus score when it ends |
+| `pi/agent.py` | Lumi: Muse Spark with tool calling (notes, reminders, missed notifications, drafts, send after a yes, focus, auto-replies, focus score) |
+| `pi/triage.py` | Muse Spark sorts each notification (urgent or digest, with a reply draft) and writes focus auto-replies |
+| `pi/voice.py` | Muse Voice Transcribe (speech-to-text) |
+| `pi/tts.py` | Meta MMS-TTS on the Pi with mood-based tone, espeak-ng as backup |
+| `pi/phone.py` | Real phone link: new notifications from KDE Connect go to Muse Spark; approved replies go back through the phone; phone battery |
+| `pi/web.py` | Web console and the desk's brain: push-to-talk, notifications, approve and send, reminders, focus, events for the laptop window |
+| `pi/tools.py` | SQLite storage and the tool definitions |
+| `pi/focus.py` | Focus sessions, auto-reply switch, one reply per person |
+| `pi/hardware.py`, `pi/screen.py` | Button, LEDs, and Lumi's animated OLED screens (start-up, idle, focus, listening, thinking, reply, alerts) |
 | `pi/weather.py` | Current weather for the desk screen (Open-Meteo) |
-
-Nothing is sent without the user's yes. A reply goes out in one of two ways:
-
-- **On screen:** the user edits the draft and presses "Approve & send".
-- **By voice:** QuietDesk reads the draft out loud and asks "Should I send it?", then sends only if the user's next words say yes. That check is in code (`agent.py`), not left to the model: the draft must have been read out in the previous reply, the answer must contain a yes and no "no", and a draft can never be sent in the same turn it was written.
 
 ## Hardware
 
-Raspberry Pi 5, Waveshare 1.5" RGB OLED (SPI), Bluetooth speaker (boAt Stone 350 Pro), push-to-talk button, two status LEDs, and the user's Android phone (KDE Connect). The laptop browser is the mic for now. `QuietDesk_Components_List.pdf` has the original parts list.
+| Part | Wiring (physical pins) |
+|---|---|
+| Raspberry Pi 5 | |
+| Waveshare 1.5" RGB OLED (SSD1351, SPI) | VCC 1, GND 6, DIN 19, CLK 23, CS 24, DC 22 (GPIO25), RST 18 (GPIO24) |
+| Push-to-talk button | pin 13 (GPIO27) and GND |
+| Green LED (listening / thinking) | pin 15 (GPIO22) → 330 Ω → LED → GND |
+| Red LED (messages waiting) | pin 16 (GPIO23) → 330 Ω → LED → GND |
+| Android phone | KDE Connect over the same Wi-Fi |
+| Laptop | mic and speaker (desk window) |
+| Optional | Bluetooth speaker on the Pi (we used a boAt Stone 350 Pro) |
+
+`QuietDesk_Components_List.pdf` has the original parts list.

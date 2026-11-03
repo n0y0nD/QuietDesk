@@ -1,0 +1,13 @@
+# QuietDesk on the Raspberry Pi (Python 3.13, Raspberry Pi OS trixie). Versions we run with.
+# GPIO, SPI and D-Bus come from Raspberry Pi OS packages instead (see README):
+#   sudo apt install -y python3-gpiozero python3-lgpio python3-rpi-lgpio python3-spidev python3-dbus
+# and the venv is made with --system-site-packages so it can use them.
+openai==3.41.0          # client library for the Meta Model API (https://api.meta.ai/v1)
+python-dotenv==1.2.4
+transformers==5.22.1    # Meta MMS-TTS voice (facebook/mms-tts-eng)
+numpy==2.5.4
+pillow==11.1.0          # drawing the OLED screens
+# torch: install from the CPU index (plain PyPI pulls large GPU packages):
+#   .venv/bin/pip install torch==2.15.0 --index-url https://download.pytorch.org/whl/cpu
+# OLED driver: install without dependencies (its GPIO dependency comes from the system):
+#   .venv/bin/pip install --no-deps luma.oled==3.16.0 luma.core==2.6.0 smbus2==0.4.3 cbor2
