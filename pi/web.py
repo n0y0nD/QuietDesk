@@ -80,7 +80,8 @@ def say(text: str, ding: bool = False, mood: str = "neutral"):
     speeches[token] = (phrases, mood)
     while len(speeches) > 20:  # forget old replies
         speeches.pop(next(iter(speeches)))
-    return {"token": token, "count": len(phrases), "ding": ding}
+    # text + mood let the page speak it with the browser's own local voice instead, if the user picks that.
+    return {"token": token, "count": len(phrases), "ding": ding, "text": text, "mood": mood}
 
 
 def ask_agent(text: str) -> dict:

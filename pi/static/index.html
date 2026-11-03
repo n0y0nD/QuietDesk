@@ -80,7 +80,10 @@
 <body>
 <header>
   <h1>QuietDesk</h1>
-  <div class="models">AI by Meta: <b>Muse Spark 1.3</b> (agent + triage) · <b>Muse Voice Transcribe</b> (speech-to-text) · voice: espeak-ng (built-in, not AI)</div>
+  <div class="models">AI by Meta: <b>Muse Spark 1.3</b> (agent, triage, voice mood) · <b>Muse Voice Transcribe</b> (speech-to-text) · <b>MMS-TTS</b> (optional voice)</div>
+  <label class="models" style="margin-left:auto">Voice
+    <select id="voicePick" style="background:#0f1218;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:4px 6px;font:inherit"></select>
+  </label>
 </header>
 
 <main>
@@ -164,11 +167,42 @@ function playBlob(blob) {
 }
 
 // Play a reply phrase by phrase: phrase 1 plays while phrase 2 is being made on the Pi.
+// ---------- Voice choice ----------
+// "mms" = Meta MMS-TTS made on the Pi. Anything else = a built-in voice of this computer.
+// Only local voices are offered: online "Natural"/neural voices are AI models and are left out.
+const MOOD_TUNE = { happy: [1.1, 1.15], calm: [0.9, 0.95], serious: [1.0, 0.9], neutral: [1.0, 1.0] };  // [rate, pitch]
+function localVoices() {
+  return speechSynthesis.getVoices().filter((v) => v.localService && v.lang.startsWith("en") && !/natural|online|neural/i.test(v.name));
+}
+function fillVoices() {
+  const pick = $("#voicePick"), saved = (() => { try { return localStorage.getItem("qd-voice"); } catch (e) { return null; } })();
+  const opts = localVoices().map((v) => [v.name, v.name.replace(/^Microsoft\s+/, "").replace(/\s+-.*$/, "") + " (computer)"]);
+  opts.push(["mms", "Meta MMS-TTS (Pi)"]);
+  pick.innerHTML = opts.map(([val, label]) => `<option value="${esc(val)}">${esc(label)}</option>`).join("");
+  pick.value = opts.some(([v]) => v === saved) ? saved : opts[0][0];
+}
+speechSynthesis.onvoiceschanged = fillVoices; fillVoices();
+$("#voicePick").addEventListener("change", (e) => { try { localStorage.setItem("qd-voice", e.target.value); } catch (err) {} });
+
+function speakLocal(text, mood, me) {
+  return new Promise((done) => {
+    const voice = localVoices().find((v) => v.name === $("#voicePick").value);
+    if (!voice || me !== speakId) return done(false);
+    const [rate, pitch] = MOOD_TUNE[mood] || MOOD_TUNE.neutral;
+    const u = new SpeechSynthesisUtterance(text);
+    Object.assign(u, { voice, rate, pitch, lang: voice.lang });
+    u.onend = u.onerror = () => done(true);
+    speechSynthesis.speak(u);
+  });
+}
+
 async function speak(s) {
   if (!s || !s.count) return;
   const me = ++speakId;
   if (player) player.pause();
+  speechSynthesis.cancel();
   if (s.ding) await chime();
+  if ($("#voicePick").value !== "mms" && await speakLocal(s.text, s.mood, me)) return;
   const get = (i) => fetch(`/api/speech/${s.token}/${i}`).then((r) => (r.ok ? r.blob() : null)).catch(() => null);
   let next = get(0);
   for (let i = 0; i < s.count; i++) {

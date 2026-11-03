@@ -14,23 +14,24 @@ Every AI model in QuietDesk is a Meta model. The project calls no other AI model
 | Deciding which phone notifications are urgent, writing digests | Meta Model API (Responses API) | `muse-spark-1.3` |
 | Speech-to-text (push-to-talk voice input) | Meta Model API (Muse Voice Transcribe) | `muse-voice-transcribe-1.0` |
 | Picking the mood of each spoken reply (happy, calm, serious, neutral) | Meta Model API (Responses API) | `muse-spark-1.3` |
-| Text-to-speech (QuietDesk's voice), tone set by that mood | On the Raspberry Pi, open-source | Meta MMS-TTS, `facebook/mms-tts-eng` |
+| Text-to-speech option "Meta MMS-TTS (Pi)", tone set by that mood | On the Raspberry Pi, open-source | Meta MMS-TTS, `facebook/mms-tts-eng` |
 
 ## OS and system features (not AI models)
 
 | Feature | What we use |
 |---|---|
-| Backup voice if MMS-TTS is off or fails | `espeak-ng`, the built-in Linux system voice (rule-based, not an AI model) |
-| Recording and playing audio | ALSA / PipeWire on Raspberry Pi OS |
-| Speaker | Bluetooth speaker paired to the Pi (BlueZ) |
-| Push-to-talk button and status LED | GPIO via `gpiozero` |
+| Default voice in the web console | The browser's built-in **local** voice (on Windows: Microsoft David, Mark or Zira desktop voices). Not an AI model call. The page only offers local voices: online / "Natural" neural voices are filtered out in code. Rate and pitch follow Muse Spark's mood. |
+| Backup voice on the Pi if MMS-TTS fails | `espeak-ng`, the built-in Linux system voice (rule-based, not an AI model) |
+| Recording and playing audio | Browser mic and speakers on the laptop; ALSA / PipeWire on the Pi |
+| Optional speaker on the Pi | Bluetooth speaker paired to the Pi (BlueZ), with `QUIETDESK_SPEAK_ON=pi` |
+| Push-to-talk button and status LEDs | GPIO via `gpiozero` |
 | Status screen | Waveshare 1.5" RGB OLED over SPI |
 | Notes and reminders storage | SQLite |
 | Reading phone notifications | Android `NotificationListenerService` (OS API, no AI in the app); a simulated phone on the web console for the demo |
 | Mic for the web console | The browser's own mic (no AI) |
 | Calling the Meta Model API | `openai` Python SDK pointed at `https://api.meta.ai/v1` (client library only, no OpenAI models) |
 
-QuietDesk needs an internet connection for Muse Spark and Muse Voice Transcribe. The MMS-TTS voice runs offline on the Pi.
+QuietDesk needs an internet connection for Muse Spark and Muse Voice Transcribe. The MMS-TTS voice runs offline on the Pi. Pick the voice from the "Voice" menu at the top of the web console.
 
 ## Project layout
 
