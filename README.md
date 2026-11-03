@@ -9,7 +9,7 @@ Built for the **Meta Global AI Developer Hackathon 2026**.
 - **Your real phone, sorted by Muse Spark.** WhatsApp, Instagram, Gmail and other messages arrive from your Android phone over Wi-Fi (KDE Connect). Muse Spark decides for each one: *urgent now* or *saved for the digest*, and drafts a reply.
 - **Push to talk.** Hold the button on the desk and ask: "What did I miss?", "Remind me to call Mom at 6", "Start a 45 minute focus session". Muse Voice Transcribe turns speech into text; Muse Spark answers with tools.
 - **Replies that need your yes.** Lumi reads a draft out loud and asks "Should I send it?". Only after you say yes does the reply go out from your phone (WhatsApp's own quick reply). Or edit and press "Approve & send" on the screen.
-- **Focus sessions.** A glowing ring on the desk screen counts down. Only urgent messages interrupt. If you say yes, Lumi tells people who message you that you're busy until a set time (one short auto-reply each, in their language, marked as an auto-reply). When the session ends, Lumi reads a digest and today's focus score.
+- **Focus sessions.** A glowing ring on the desk screen counts down. Only urgent messages interrupt. Lumi tells people who message you that you're busy until a set time (one short auto-reply each, in their language, marked as an auto-reply): she asks first, or does it in every session if you switch that on. When the session ends, Lumi reads a digest and today's focus score.
 - **A desk you can glance at.** An animated face with glowing eyes, the time, your next reminder, the logos of apps with unread messages, phone battery and weather. A red light breathes while messages wait (faster if urgent).
 - **Reminders that ring** at their time, with a chime and a card on the screen.
 
@@ -48,7 +48,7 @@ QuietDesk needs an internet connection for Muse Spark and Muse Voice Transcribe.
 ## Safety and privacy
 
 - **Nothing is sent without your yes.** On screen you press "Approve & send". By voice, Lumi reads the draft and asks first; the check is in code (`agent.py`), not left to the model: the draft must have been read out in the previous reply, your answer must contain a yes and no "no", and a draft is never sent in the same turn it was written.
-- **Auto-replies only after a yes**, only during a focus session, at most one per person, never to urgent messages, and always marked "(auto-reply from Lumi)".
+- **Auto-replies only with your consent**: Lumi asks when a focus session starts, or you turn them on for every session once with `QUIETDESK_FOCUS_AUTO_REPLY=on` (say "don't auto-reply" to skip one session). Only during focus, at most one per person, never to urgent messages, always marked "(auto-reply from Lumi)".
 - **Only messaging apps reach the model** (`QUIETDESK_PHONE_APPS`), and anything that looks like an OTP or password is never sent to it.
 - The web console only listens on the Pi itself; the laptop reaches it through an SSH tunnel.
 

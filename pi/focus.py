@@ -3,9 +3,14 @@
 During a session only urgent messages interrupt; everything else waits for the digest at the end.
 If the user says yes, Hush also sends one polite auto-reply per person ("busy until 5:30 PM").
 """
+import os
 import threading
 import time
 from datetime import datetime
+
+# QUIETDESK_FOCUS_AUTO_REPLY=on: the user chose to have auto-replies on in every focus session
+# (they can still say "don't auto-reply" to turn them off for one session). Otherwise Lumi asks each time.
+AUTO_REPLY_DEFAULT = os.getenv("QUIETDESK_FOCUS_AUTO_REPLY", "off").strip().lower() == "on"
 
 _lock = threading.Lock()
 _session = None  # {"start", "end", "minutes", "auto_reply", "replied": set of senders, "auto_count"}
@@ -24,10 +29,11 @@ def start(minutes: int = 25) -> dict:
     now = time.time()
     with _lock:
         old, _session = _session, {"start": now, "end": now + minutes * 60, "minutes": minutes,
-                                   "auto_reply": False, "replied": set(), "auto_count": 0}
+                                   "auto_reply": AUTO_REPLY_DEFAULT, "replied": set(), "auto_count": 0}
     if old and on_end:
         on_end(old, True)
-    return {"ok": True, "minutes": minutes, "ends_at": clock(now + minutes * 60)}
+    return {"ok": True, "minutes": minutes, "ends_at": clock(now + minutes * 60),
+            "auto_reply": AUTO_REPLY_DEFAULT}
 
 
 def stop() -> dict:

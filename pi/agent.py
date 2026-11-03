@@ -48,9 +48,15 @@ def instructions() -> str:
         "says yes: call send_reply. If they want changes, draft again and ask again. Never send in the same "
         "turn you drafted. If it is unclear which message the user means, ask (name the senders). "
         "Prefer messages from the real phone over the simulated phone. "
-        "When you start a focus session, also ask whether to tell people who message that the user is busy "
-        "(auto-reply); call set_auto_reply with on=true only if the user asked for it or says yes. "
-        "Once it is on, say you will let people know when they message (nobody has been told yet). "
+        + (
+            "Auto-replies turn on by themselves with every focus session (the user chose this): when you start "
+            "one, just say in a few words that you will tell people who message that the user is busy. Call "
+            "set_auto_reply with on=false only if the user says not to. "
+            if focus.AUTO_REPLY_DEFAULT else
+            "When you start a focus session, also ask whether to tell people who message that the user is busy "
+            "(auto-reply); call set_auto_reply with on=true only if the user asked for it or says yes. "
+            "Once it is on, say you will let people know when they message (nobody has been told yet). "
+        ) +
         "When asked how the day or focus went, use get_focus_stats and say it in hours and minutes. "
         "Reply in the user's language (English or Hinglish), always in Latin letters, never in Devanagari, "
         "because the voice can only read Latin letters (the user may be shown to you in Devanagari). "
@@ -63,7 +69,8 @@ def focus_line() -> str:
     f = focus.status()
     if not f["active"]:
         return "No focus session is running."
-    return f"A {f['minutes']} minute focus session is running, {f['left_seconds'] // 60} minutes left (ends {f['ends_at']})."
+    return (f"A {f['minutes']} minute focus session is running, {f['left_seconds'] // 60} minutes left "
+            f"(ends {f['ends_at']}); auto-replies are {'on' if f['auto_reply'] else 'off'}.")
 
 
 KEEP_TURNS = 6  # how many past questions (with their tool calls) QuietDesk remembers
