@@ -109,6 +109,7 @@ def say(text: str, ding: bool = False, mood: str = "neutral"):
 
 
 def ask_agent(text: str) -> dict:
+    print(f"  you: {text}")  # what Lumi heard (kept only in web.log on the Pi), handy when something goes wrong
     hw.set_state("thinking")
     try:
         with agent_lock:
@@ -118,6 +119,7 @@ def ask_agent(text: str) -> dict:
     except Exception:
         hw.set_state("ready")
         raise
+    print(f"  lumi: {reply}")
     hw.set_reply(reply, mood)
     refresh_counts()  # the agent may have drafted replies or read notifications
     if SPEAK_ON != "pi":
