@@ -56,9 +56,10 @@ QuietDesk needs an internet connection for Muse Spark and Muse Voice Transcribe.
 
 ```
 pi/                        Python code that runs on the Raspberry Pi
-start-desk.ps1             Laptop: keeps the tunnel open and runs the hidden desk window (mic + speaker)
-install-desk-startup.ps1   Laptop: start the desk window at every Windows sign-in
-open-quietdesk.ps1         Laptop: open the full web console
+start-desk.ps1             Laptop: keeps the tunnel open and runs the QuietDesk app window (mic + speaker)
+install-desk-startup.ps1   Laptop: start QuietDesk at every Windows sign-in
+install-app-shortcut.ps1   Laptop: "QuietDesk" shortcut on the Desktop and Start menu (opens the app window)
+open-quietdesk-app.ps1     Laptop: what the shortcut runs (brings the window back, or starts QuietDesk)
 ```
 
 The phone needs no custom app: it runs KDE Connect from the Play Store.
@@ -91,8 +92,8 @@ cp .env.example .env        # then paste your MODEL_API_KEY into .env (and QUIET
 
 **On the laptop** (Windows, with SSH key access to the Pi):
 
-- Hands-free: run `start-desk.ps1`. It keeps the tunnel to the Pi open (and reconnects) and opens QuietDesk in a small Edge window in desk mode (`/?desk=1`), minimised. That window is QuietDesk's mic and speaker: press the button on the desk and talk. The first time, click "Allow" for the microphone. Run `install-desk-startup.ps1` once to start it at every Windows sign-in.
-- Full web console: run `open-quietdesk.ps1`, or by hand:
+- QuietDesk app: run `start-desk.ps1`. It keeps the tunnel to the Pi open (and reconnects) and opens QuietDesk in its own app window (an Edge app window with QuietDesk's icon, no address bar), minimised. That window is QuietDesk's mic and speaker: press the button on the desk and talk. Click it in the taskbar to see the full console. The first time, click "Allow" for the microphone. Run `install-desk-startup.ps1` once to start it at every Windows sign-in, and `install-app-shortcut.ps1` once for a QuietDesk shortcut on the Desktop and Start menu.
+- Or in any browser:
 
 ```bash
 ssh -N -L 8000:localhost:8000 admin@raspberrypi5.local    # then open http://localhost:8000

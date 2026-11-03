@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>QuietDesk</title>
+<link rel="icon" href="/icon.png">
 <style>
   :root {
     --bg: #0f1115; --panel: #171a21; --line: #262b36; --text: #e8eaf0; --muted: #8a92a6;
@@ -414,7 +415,6 @@ loadMeta(null);
 // Desk mode (?desk=1): the hidden window that starts with the laptop (start-desk.ps1). It is QuietDesk's
 // ears and voice: it answers the desk button and speaks alerts even while minimised.
 const DESK = new URLSearchParams(location.search).has("desk");
-if (DESK) document.title = "QuietDesk desk";
 
 // The red button on the desk is push-to-talk too: the page watches it and records with this laptop's mic.
 let deskHeld = false;

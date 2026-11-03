@@ -326,6 +326,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.split("?")[0] == "/":  # "/" or "/?desk=1"
             self._send(200, INDEX.read_bytes(), "text/html; charset=utf-8")
+        elif self.path == "/icon.png":  # app icon (taskbar, window)
+            self._send(200, INDEX.with_name("icon.png").read_bytes(), "image/png")
         elif self.path == "/api/state":
             self._json(state())
         elif self.path in ("/api/hw", "/api/hw?desk=1"):  # pages poll this to use the desk button as push-to-talk
