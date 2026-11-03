@@ -182,6 +182,8 @@ def phone_notification(app, sender, text, phone_id, reply_id) -> None:
 # The real phone, through KDE Connect. QUIETDESK_PHONE=off to use only the simulated phone.
 phone = Phone(phone_notification)
 tools.ring_hook = phone.ring  # "Lumi, where's my phone?"
+tools.phone_dismiss_hook = phone.dismiss  # clearing a message also clears it on the phone
+tools.music_hook = phone.music  # "Lumi, next song"
 
 
 # ---- Desk screen details and timers, checked once a second ----
@@ -220,6 +222,7 @@ def _focus_info() -> dict:
 
 def log_focus_session(s: dict, early: bool) -> None:
     """Every focus session that ends (on time or stopped early) goes into today's focus score."""
+    tools.ambient["sound"] = None  # focus sounds stop with the session
     held = _held_since(s["start"])
     minutes = (min(time.time(), s["end"]) - s["start"]) / 60
     tools.log_focus(s["start"], minutes, len(held), sum(n["urgency"] == "urgent" for n in held),
@@ -334,7 +337,9 @@ class Handler(BaseHTTPRequestHandler):
             if self.path.endswith("desk=1"):  # the hidden desk window on the laptop (start-desk.ps1)
                 desk_window["seen"] = time.monotonic()
             self._json({"down": hw.button_down, "presses": hw.presses, "hardware": hw.ok, "events": event_seq,
-                        "desk_window": time.monotonic() - desk_window["seen"] < 2, "meta": metalog.seq})
+                        "desk_window": time.monotonic() - desk_window["seen"] < 2, "meta": metalog.seq,
+                        "sound": tools.ambient["sound"],
+                        "page": int(INDEX.stat().st_mtime)})  # pages reload themselves when this changes
         elif self.path == "/api/meta":  # the live Meta AI panel
             self._json(metalog.snapshot())
         elif m := re.fullmatch(r"/api/events\?after=(\d+)", self.path):
@@ -417,6 +422,8 @@ class Handler(BaseHTTPRequestHandler):
                         return self._json({"error": str(e)}, 400)
                 else:
                     tools.set_notification_status(nid, "dismissed")
+                    if n := tools.get_notification(nid):
+                        tools.clear_on_phone(n)
                 refresh_counts()
                 return self._json({"ok": True})
 

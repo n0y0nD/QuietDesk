@@ -139,6 +139,9 @@
       <button class="btn" data-q="Stop my focus session.">Stop focus</button>
       <button class="btn" data-q="How did my focus go today?">Focus score</button>
       <button class="btn" data-q="Where is my phone?">Find my phone</button>
+      <button class="btn" data-q="Play rain sounds.">Rain sounds</button>
+      <button class="btn" data-q="Stop the focus sounds.">Stop sounds</button>
+      <button class="btn" data-q="What song is playing on my phone?">Now playing</button>
     </div>
     <div id="focusLine" class="sub" style="margin:-6px 0 12px"></div>
     <div id="log"></div>
@@ -198,6 +201,53 @@ function chime() {
     });
     setTimeout(() => { ac.close(); done(); }, 800);
   });
+}
+
+// ---------- Focus sounds: rain, ocean, brown noise, made live here (no files, no internet) ----------
+let snd = null;  // { name, ac, master }
+function noiseBuffer(ac, brown) {
+  const len = ac.sampleRate * 4, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < len; i++) {
+    const w = Math.random() * 2 - 1;
+    if (brown) { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; } else d[i] = w;
+  }
+  return buf;
+}
+function setSound(name) {
+  if ((snd && snd.name) === (name || null)) return;
+  if (snd) {  // fade out the old one
+    const old = snd; old.master.gain.setTargetAtTime(0, old.ac.currentTime, 0.4);
+    setTimeout(() => old.ac.close(), 2000);
+    snd = null;
+  }
+  if (!name) return;
+  const ac = new AudioContext(), master = ac.createGain();
+  master.gain.value = 0; master.connect(ac.destination);
+  const loop = (brown) => { const s = ac.createBufferSource(); s.buffer = noiseBuffer(ac, brown); s.loop = true; s.start(); return s; };
+  const filt = (type, freq) => { const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; return f; };
+  const gain = (v) => { const g = ac.createGain(); g.gain.value = v; return g; };
+  if (name === "rain") {
+    loop(false).connect(filt("highpass", 400)).connect(filt("lowpass", 2800)).connect(gain(0.45)).connect(master);
+    loop(true).connect(filt("lowpass", 500)).connect(gain(0.9)).connect(master);
+  } else if (name === "ocean") {  // waves: a slow swell every ~11 seconds
+    const swell = gain(0.7), lfo = ac.createOscillator(), depth = gain(0.6);
+    lfo.frequency.value = 0.09; lfo.connect(depth).connect(swell.gain); lfo.start();
+    loop(true).connect(filt("lowpass", 700)).connect(swell);
+    loop(false).connect(filt("bandpass", 1500)).connect(gain(0.05)).connect(swell);
+    swell.connect(master);
+  } else {
+    loop(true).connect(filt("lowpass", 900)).connect(gain(1.2)).connect(master);
+  }
+  ac.resume();
+  snd = { name, ac, master, level: -1 };
+}
+// Quieter while Lumi talks, silent while you talk (so the mic only hears you).
+function duckSound() {
+  if (!snd) return;
+  const talking = speechSynthesis.speaking || (player && !player.paused && !player.ended);
+  const level = recording || starting ? 0 : talking ? 0.25 : 1;
+  if (level !== snd.level) { snd.level = level; snd.master.gain.setTargetAtTime(level, snd.ac.currentTime, recording ? 0.05 : 0.5); }
 }
 
 function playBlob(blob) {
@@ -417,7 +467,7 @@ loadMeta(null);
 const DESK = new URLSearchParams(location.search).has("desk");
 
 // The red button on the desk is push-to-talk too: the page watches it and records with this laptop's mic.
-let deskHeld = false;
+let deskHeld = false, pageVersion = null;
 setInterval(async () => {
   try {
     // Only one page answers the desk button, so two pages never both record and talk:
@@ -427,6 +477,10 @@ setInterval(async () => {
     const mine = DESK || !h.desk_window;
     if (h.events !== lastEvent) newEvents(h.events, mine);
     if (h.meta !== lastMeta) loadMeta(h.meta);
+    setSound(mine ? h.sound : null); duckSound();
+    // QuietDesk was updated on the Pi: reload to get the new page (not while you are talking).
+    if (pageVersion === null) pageVersion = h.page;
+    else if (h.page && h.page !== pageVersion && !recording && !starting && !speechSynthesis.speaking && (!player || player.paused || player.ended)) location.reload();
     if (!h.hardware || !mine) { deskHeld = false; return; }
     if (h.down && !deskHeld) { deskHeld = true; startRec(); }
     else if (!h.down && deskHeld) { deskHeld = false; stopRec(); }

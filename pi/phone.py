@@ -20,6 +20,7 @@ DAEMON_PATH = "/modules/kdeconnect"
 DEVICE_IFACE = "org.kde.kdeconnect.device"
 NOTIFS_IFACE = "org.kde.kdeconnect.device.notifications"
 PROPS_IFACE = "org.freedesktop.DBus.Properties"
+MPRIS_IFACE = "org.kde.kdeconnect.device.mprisremote"
 POLL_SECONDS = 1.5
 
 # Only these apps reach QuietDesk (and Muse Spark). Set QUIETDESK_PHONE_APPS=all to allow every app.
@@ -142,6 +143,69 @@ class Phone:
         notifs = self._obj(f"{DAEMON_PATH}/devices/{self.device}/notifications")
         notifs.sendReply(reply_id, text, dbus_interface=NOTIFS_IFACE)
         self._sent = (self._sent + [text])[-10:]
+
+    def dismiss(self, pid: str, sender: str = "") -> bool:
+        """Clear one notification from the phone's notification bar. Returns True if it was cleared.
+        Checks it is still the same message (KDE Connect reuses ids), and skips ones the phone won't let go."""
+        import dbus
+
+        if not (self.connected and self.device and pid):
+            return False
+        try:
+            notifs = self._obj(f"{DAEMON_PATH}/devices/{self.device}/notifications")
+            if pid not in {str(i) for i in notifs.activeNotifications(dbus_interface=NOTIFS_IFACE)}:
+                return False  # already gone from the phone
+            n = self._notification(pid)
+            if sender and str(n.get("title", "")).strip() != sender:
+                return False  # the id now belongs to a different notification
+            if not bool(n.get("dismissable", True)):
+                return False
+            self._obj(f"{DAEMON_PATH}/devices/{self.device}/notifications/{pid}").dismiss(
+                dbus_interface=NOTIFS_IFACE + ".notification")
+            return True
+        except dbus.DBusException as e:
+            print(f"  phone: could not clear {pid}: {e.get_dbus_message() or e}")
+            return False
+
+    def music(self, action: str, volume: int = None) -> dict:
+        """Control the music app on the phone (Spotify, YouTube Music...) through KDE Connect's media remote.
+        action: play, pause, next, previous, now_playing or set_volume."""
+        import dbus
+
+        if not (self.connected and self.device):
+            raise RuntimeError("The phone is not connected (open KDE Connect on the phone, same Wi-Fi).")
+        remote = self._obj(f"{DAEMON_PATH}/devices/{self.device}/mprisremote")
+
+        def props():
+            return remote.GetAll(MPRIS_IFACE, dbus_interface=PROPS_IFACE)
+
+        remote.requestPlayerList(dbus_interface=MPRIS_IFACE)
+        p = props()
+        for _ in range(4):  # the phone answers the player list request a moment later
+            if p.get("playerList"):
+                break
+            time.sleep(0.4)
+            p = props()
+        players = [str(x) for x in p.get("playerList", [])]
+        if not players:
+            return {"ok": False, "error": "No music app is open on the phone. The user should open their "
+                                          "music app (e.g. Spotify or YouTube Music) on the phone once."}
+        if str(p.get("player", "")) not in players:
+            remote.Set(MPRIS_IFACE, "player", dbus.String(players[0]), dbus_interface=PROPS_IFACE)
+
+        actions = {"play": "Play", "pause": "Pause", "next": "Next", "previous": "Previous"}
+        if action in actions:
+            remote.sendAction(actions[action], dbus_interface=MPRIS_IFACE)
+            time.sleep(1.0)  # let the phone switch song before reading what is playing
+        elif action == "set_volume":
+            level = max(0, min(100, int(volume if volume is not None else 50)))
+            remote.Set(MPRIS_IFACE, "volume", dbus.Int32(level), dbus_interface=PROPS_IFACE)
+        elif action != "now_playing":
+            return {"ok": False, "error": f"unknown action {action}"}
+        p = props()
+        return {"ok": True, "app": str(p.get("player", "")), "playing": bool(p.get("isPlaying", False)),
+                "title": str(p.get("title", "")), "artist": str(p.get("artist", "")),
+                "volume": int(p.get("volume", 0))}
 
     def ring(self) -> None:
         """Make the phone ring loudly (KDE Connect "Find my phone"), even if it is on silent."""

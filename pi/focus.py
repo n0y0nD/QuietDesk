@@ -1,7 +1,7 @@
 """Focus sessions: a timer QuietDesk runs while the phone stays out of reach.
 
 During a session only urgent messages interrupt; everything else waits for the digest at the end.
-If the user says yes, Hush also sends one polite auto-reply per person ("busy until 5:30 PM").
+If the user says yes, Lumi also sends one polite auto-reply per person ("busy until 5:30 PM").
 """
 import os
 import threading

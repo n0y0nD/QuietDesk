@@ -180,9 +180,21 @@ def dismiss_notifications(sender: str = "", app: str = "") -> dict:
     items = [n for n in all_notifications() if n["status"] == "new"
              and (not sender or sender.lower().replace(" ", "") in (n["sender"] or "").lower().replace(" ", ""))
              and (not app or app.lower() == (n["app"] or "").lower())]
+    on_phone = 0
     for n in items:
         set_notification_status(n["id"], "dismissed")
-    return {"ok": True, "dismissed": len(items)}
+        on_phone += clear_on_phone(n)
+    return {"ok": True, "dismissed": len(items), "also_cleared_on_phone": on_phone}
+
+
+phone_dismiss_hook = None  # web.py sets this to the phone's dismiss function
+
+
+def clear_on_phone(n: dict) -> bool:
+    """Also clear a real phone notification from the phone's notification bar."""
+    if phone_dismiss_hook is None or n.get("source") != "phone" or not n.get("phone_id"):
+        return False
+    return bool(phone_dismiss_hook(n["phone_id"], n.get("sender") or ""))
 
 
 ring_hook = None  # web.py sets this to the phone's ring function
@@ -195,12 +207,37 @@ def ring_phone() -> dict:
     return {"ok": True, "status": "the phone is ringing"}
 
 
+music_hook = None  # web.py sets this to the phone's music remote
+
+
+def control_phone_music(action: str, volume: int = None) -> dict:
+    if music_hook is None:
+        return {"ok": False, "error": "no phone is linked"}
+    return music_hook(action, volume)
+
+
+# Calm background sound, made live in the desk window on the laptop (no files, no internet).
+SOUNDS = ("rain", "ocean", "brown_noise")
+ambient = {"sound": None}
+
+
+def focus_sounds(sound: str) -> dict:
+    sound = (sound or "off").strip().lower().replace(" ", "_")
+    if sound in ("off", "stop", "none"):
+        ambient["sound"] = None
+        return {"ok": True, "playing": None}
+    if sound not in SOUNDS:
+        return {"ok": False, "error": f"choose one of {', '.join(SOUNDS)} or off"}
+    ambient["sound"] = sound
+    return {"ok": True, "playing": sound}
+
+
 def set_auto_reply(on: bool = True) -> dict:
     return focus.set_auto_reply(on)
 
 
 def save_auto_reply(notification_id: int, text: str) -> None:
-    """Remember the auto-reply Hush sent; the message itself still waits for the user."""
+    """Remember the auto-reply Lumi sent; the message itself still waits for the user."""
     with _db() as conn:
         conn.execute("UPDATE notifications SET reply = ? WHERE id = ?", (text, notification_id))
 
@@ -342,8 +379,8 @@ TOOL_SPECS = [
     {
         "type": "function",
         "name": "dismiss_notifications",
-        "description": "Clear waiting notifications from the desk (marks them handled; nothing is sent or deleted "
-        "on the phone). Leave sender and app empty to clear all, or give one to clear only those.",
+        "description": "Clear waiting notifications from the desk and from the phone's notification bar "
+        "(nothing is sent). Leave sender and app empty to clear all, or give one to clear only those.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -357,6 +394,32 @@ TOOL_SPECS = [
         "name": "ring_phone",
         "description": "Make the user's phone ring loudly so they can find it (works even on silent).",
         "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "type": "function",
+        "name": "control_phone_music",
+        "description": "Control the music app on the user's phone (Spotify, YouTube Music...): play, pause, "
+        "next or previous song, say what is playing, or set its volume. The sound comes from the phone.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string",
+                           "enum": ["play", "pause", "next", "previous", "now_playing", "set_volume"]},
+                "volume": {"type": "integer", "description": "0 to 100, only for set_volume"},
+            },
+            "required": ["action"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "focus_sounds",
+        "description": "Play calm background sound on the desk speaker to help focus (rain, ocean waves, or "
+        "brown noise, a deep soft hum), or turn it off. It stops by itself when a focus session ends.",
+        "parameters": {
+            "type": "object",
+            "properties": {"sound": {"type": "string", "enum": ["rain", "ocean", "brown_noise", "off"]}},
+            "required": ["sound"],
+        },
     },
     {
         "type": "function",
@@ -380,6 +443,8 @@ TOOL_FUNCTIONS = {
     "get_focus_stats": get_focus_stats,
     "ring_phone": ring_phone,
     "dismiss_notifications": dismiss_notifications,
+    "control_phone_music": control_phone_music,
+    "focus_sounds": focus_sounds,
 }
 
 

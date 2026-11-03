@@ -67,6 +67,10 @@ def instructions() -> str:
             "(auto-reply); call set_auto_reply with on=true only if the user asked for it or says yes. "
             "Once it is on, say you will let people know when they message (nobody has been told yet). "
         ) +
+        "Music: 'play music', 'pause', 'next song', 'what's playing' or 'louder' mean the music app on the "
+        "phone, so use control_phone_music. Rain, ocean, white or brown noise, or 'focus sounds' mean calm "
+        "sound on the desk speaker, so use focus_sounds (for white noise use brown_noise). If the user just "
+        "says 'play something calm' while focusing, use focus_sounds with rain. "
         "When asked how the day or focus went, use get_focus_stats and say it in hours and minutes. "
         "Always reply in English, even if a message or the user uses another language. "
         "Say times in 12-hour form like 4:30 PM. "
