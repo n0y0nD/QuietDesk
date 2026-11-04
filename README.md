@@ -2,7 +2,7 @@
 
 A voice-first AI companion on a Raspberry Pi 5 that helps you keep your phone out of reach during focused work, without missing anything important. Its voice and face are called **Lumi**.
 
-Built for the **Meta Global AI Developer Hackathon 2026**.
+Built by Nayanjyoti Das and Mintu Gogoi for the **Meta Global AI Developer Hackathon 2026**.
 
 <p align="center">
   <img src="docs/quietdesk.jpg" width="720" alt="QuietDesk on a desk: the OLED shows Lumi's eyes, the time, the phone's battery and the weather, wired to a Raspberry Pi 5 with a button and two LEDs">
@@ -14,11 +14,11 @@ Built for the **Meta Global AI Developer Hackathon 2026**.
   <sub>Start a focus session, get an urgent message from Mom, reply by voice (sent only after a yes), find the phone, and hear what you missed.</sub>
 </p>
 
-## What I built during the hackathon, and what I used
+## What we built during the hackathon, and what we used
 
 All code in this repository was written during the hackathon (it started Oct 26; the first commit is Oct 30, 2026). Every AI model QuietDesk calls is a Meta model.
 
-**Built during the hackathon (my work):**
+**Built during the hackathon (our work):**
 - **Lumi, the agent**: Muse Spark with tool calling for notes, reminders, missed messages, reply drafts, focus sessions, auto-replies, focus score, phone music, focus sounds, find my phone and clearing notifications.
 - **Message sorting**: each phone notification goes to Muse Spark, which decides urgent or digest and drafts a reply. Only messaging apps are sent, and OTPs and passwords are filtered out first.
 - **The "yes" safety check, in code**: a reply goes out only after Lumi has read the draft aloud and you said yes in your next turn.
@@ -27,7 +27,7 @@ All code in this repository was written during the hackathon (it started Oct 26;
 - **Phone integration code**: reading notifications, replying, clearing, ringing, music control and battery, all through KDE Connect's D-Bus interface.
 - **The QuietDesk window** on the laptop: push-to-talk with the laptop mic, focus sounds made in code, and the live "Meta AI" panel; plus auto-start on the Pi and the laptop.
 
-**Used, not built by me:**
+**Used, not built by us:**
 - **Meta AI models**: Muse Spark and Muse Voice Transcribe (Meta Model API), and MMS-TTS (open-source Meta model, runs on the Pi).
 - **Open-source software**: KDE Connect (phone link), PyTorch and transformers (to run MMS-TTS), Pillow and luma.oled (OLED drawing and driver), gpiozero (GPIO), dbus-python, python-dotenv, numpy, the `openai` client library (pointed at the Meta Model API), espeak-ng (backup voice), SQLite, the Nunito Sans font.
 - **Services and platforms**: Open-Meteo (weather API), Raspberry Pi OS and systemd, Microsoft Edge (app window), the browser's Web Audio and built-in local voices, SSH.
