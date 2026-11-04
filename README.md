@@ -4,6 +4,8 @@ A voice-first AI companion on a Raspberry Pi 5 that helps you keep your phone ou
 
 Built by Nayanjyoti Das and Mintu Gogoi for the **Meta Global AI Developer Hackathon 2026**.
 
+**Project page:** https://n0y0nd.github.io/QuietDesk/
+
 <p align="center">
   <img src="docs/quietdesk.jpg" width="720" alt="QuietDesk on a desk: the OLED shows Lumi's eyes, the time, the phone's battery and the weather, wired to a Raspberry Pi 5 with a button and two LEDs">
 </p>
