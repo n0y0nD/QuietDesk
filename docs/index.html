@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QuietDesk · Lumi</title>
+<meta name="description" content="QuietDesk: a Raspberry Pi desk companion that keeps your phone out of reach during focused work. Built with Meta AI models for the Meta Global AI Developer Hackathon 2026.">
+<style>
+  :root {
+    --bg: #0d1017; --panel: #161a23; --panel2: #10131a; --line: #262b36; --text: #e8eaf0; --muted: #8a92a6;
+    --blue: #38bdf8; --violet: #a78bfa; --green: #4ade80; --accent: #6ea8ff;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); }
+  img { max-width: 100%; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+  section { padding: 44px 0 8px; }
+  h1 { font-size: clamp(34px, 6vw, 54px); line-height: 1.1; margin: 0 0 10px; letter-spacing: -.5px; }
+  h1 span { color: var(--violet); font-weight: 500; }
+  h2 { font-size: 26px; margin: 0 0 6px; }
+  .lede { color: #c7ccd8; font-size: 19px; max-width: 760px; margin: 0 0 14px; }
+  .sub { color: var(--muted); font-size: 15px; margin: 0 0 18px; max-width: 780px; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+         color: #c4b5fd; background: #2a2340; padding: 4px 10px; border-radius: 6px; margin-bottom: 18px; }
+  .by { color: var(--muted); margin: 0 0 22px; }
+  .btns { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px; font-weight: 600;
+         text-decoration: none; border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #0b1220; }
+  .btn:hover { border-color: var(--accent); }
+  nav.jump { display: flex; gap: 6px 16px; flex-wrap: wrap; font-size: 14px; margin-top: 18px; }
+  nav.jump a { color: var(--muted); text-decoration: none; }
+  nav.jump a:hover { color: var(--text); }
+  .hero-media { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; margin-top: 26px; }
+  .hero-media img { width: 100%; display: block; border-radius: 14px; border: 1px solid var(--line); }
+  @media (max-width: 760px) { .hero-media { grid-template-columns: 1fr; } }
+  .video { position: relative; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #000; }
+  .video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
+  /* ---------- Meta AI, live ---------- */
+  figure.shot { margin: 0 0 18px; }
+  figure.shot img { display: block; width: 100%; border-radius: 14px; border: 1px solid var(--line); }
+  figure.shot figcaption { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .models { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 860px) { .models { grid-template-columns: 1fr; } }
+  .model { --c: var(--accent); background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--c);
+           border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .model .verb { font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--c); }
+  .model h3 { margin: 0; font-size: 19px; }
+  .model .where { font-size: 13px; color: var(--muted); }
+  .model p { margin: 0; }
+  .model ul { margin: 0; padding-left: 18px; color: #c7ccd8; font-size: 15px; }
+  .model li { margin: 3px 0; }
+  .ex { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; margin-top: auto; }
+  .ex small { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 4px; }
+  .ex .io { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; }
+  .ex .io span { color: var(--muted); }
+  .ex .io b { font-weight: 500; color: var(--text); }
+  .ex .io b em { font-style: normal; color: var(--c); }
+
+  /* ---------- content ---------- */
+  ol.how { counter-reset: s; list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  ol.how li { counter-increment: s; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px 12px 54px; position: relative; }
+  ol.how li::before { content: counter(s); position: absolute; left: 14px; top: 12px; width: 28px; height: 28px; border-radius: 8px;
+                      background: #232937; display: grid; place-items: center; font-weight: 700; color: var(--violet); }
+  code { font: 13px ui-monospace, Consolas, monospace; background: #1b2030; border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .box h3 { margin: 0 0 8px; font-size: 16px; }
+  .box.green { border-left: 4px solid var(--green); }
+  .box.grey { border-left: 4px solid var(--muted); }
+  .box ul { margin: 0; padding-left: 18px; }
+  .box li { margin: 4px 0; }
+  footer { color: var(--muted); font-size: 14px; padding: 40px 0 50px; border-top: 1px solid var(--line); margin-top: 50px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <section style="padding-top:56px">
+    <div class="tag">Meta Global AI Developer Hackathon 2026</div>
+    <h1>QuietDesk <span>· Lumi</span></h1>
+    <p class="lede">A Raspberry Pi desk companion that keeps your phone out of reach during focused work, without missing anything important. You talk to Lumi; Meta AI models listen, think and speak.</p>
+    <p class="by">Built by Nayanjyoti Das and Mintu Gogoi. A live project on real hardware: a Raspberry Pi 5, an OLED screen, a button and two LEDs, connected to a real Android phone.</p>
+    <div class="btns">
+      <a class="btn primary" href="#video">▶ Demo video</a>
+      <a class="btn" href="https://github.com/n0y0nD/QuietDesk">GitHub repo</a>
+      <a class="btn" href="#meta">Meta AI, live</a>
+    </div>
+    <nav class="jump">
+      <a href="#how">How it works</a><a href="#meta">Where Meta AI is used</a>
+      <a href="#safety">Safety</a><a href="#built">What we built this week</a>
+    </nav>
+    <div class="hero-media">
+      <img src="quietdesk.jpg" alt="QuietDesk on a desk: the OLED shows Lumi's eyes, the time, the phone's battery and the weather, wired to a Raspberry Pi 5 with a button and two LEDs">
+      <img src="demo.gif" alt="Lumi on the desk screen: a focus session, an urgent message from Mom, a reply draft, the reply sent, ringing the phone, and the summary">
+    </div>
+  </section>
+
+  <section id="video">
+    <h2>Demo video</h2>
+    <p class="sub">About 2.5 minutes: a focus session, an urgent message from Mom, a reply by voice (sent only after a yes), finding the phone, and the live Meta AI panel.</p>
+    <div class="video">
+      <iframe src="https://drive.google.com/file/d/1q20hNHVfhpwFOAeMkskNMcESVmwtWoPI/preview" allow="autoplay; fullscreen" allowfullscreen loading="lazy" title="QuietDesk demo video"></iframe>
+    </div>
+  </section>
+
+  <section id="meta">
+    <h2>Meta AI, live</h2>
+    <p class="sub">Every AI model QuietDesk calls is a Meta model, and it calls no other AI model, local or cloud. The QuietDesk window shows each call the moment it runs: which model, what it did, how long it took and how many tokens it used.</p>
+    <figure class="shot">
+      <img src="meta-panel.jpg" alt="The Meta AI, live panel in the QuietDesk window: 17 calls, 26,469 tokens, 2.7 s average. Muse Voice Transcribe 6 calls, Muse Spark 1.3 10 calls, MMS-TTS 1 call. The newest calls: Lumi's answer spoken by MMS-TTS, Muse Spark writing answers and choosing to ring the phone." loading="lazy">
+      <figcaption>The panel during our demo session on Nov 5, 2026: 17 Meta model calls, 26,469 tokens. The newest calls are at the top: Muse Spark choosing to ring the phone and writing answers, and MMS-TTS speaking an answer on the Pi.</figcaption>
+    </figure>
+
+    <div class="models">
+      <div class="model" style="--c:var(--blue)">
+        <div class="verb">1 · Listens</div>
+        <h3>Muse Voice Transcribe</h3>
+        <div class="where">Meta Model API · <code>pi/voice.py</code></div>
+        <p>Turns what you say into text while you hold the button on the desk.</p>
+        <ul><li>Push to talk, English</li><li>Knows the words "Lumi" and "QuietDesk"</li></ul>
+        <div class="ex"><small>Example</small><div class="io">
+          <span>In</span><b>your voice, about 2 seconds</b>
+          <span>Out</span><b><em>"Start a 25 minute focus session"</em></b>
+        </div></div>
+      </div>
+
+      <div class="model" style="--c:var(--violet)">
+        <div class="verb">2 · Thinks</div>
+        <h3>Muse Spark 1.3</h3>
+        <div class="where">Meta Model API · <code>pi/agent.py</code> <code>pi/triage.py</code></div>
+        <p>Lumi's brain. Answers you and picks the right action with tool calling.</p>
+        <ul>
+          <li>Starts focus sessions, reads missed messages, sets reminders</li>
+          <li>Sorts each phone message: urgent now, or saved for later</li>
+          <li>Drafts replies and "busy" auto-replies</li>
+          <li>Rings the phone, plays focus sounds, controls music</li>
+          <li>Picks the mood of each reply</li>
+        </ul>
+        <div class="ex"><small>Example</small><div class="io">
+          <span>In</span><b>"Where's my phone?"</b>
+          <span>Out</span><b><em>chose to: ring phone</em></b>
+        </div></div>
+      </div>
+
+      <div class="model" style="--c:var(--green)">
+        <div class="verb">3 · Speaks</div>
+        <h3>MMS-TTS</h3>
+        <div class="where">On the Raspberry Pi, offline · <code>pi/tts.py</code></div>
+        <p>Lumi's voice. Meta's open-source speech model, running on the Pi itself.</p>
+        <ul><li>No internet needed for the voice</li><li>Four moods: happy, calm, serious, neutral</li></ul>
+        <div class="ex"><small>Example</small><div class="io">
+          <span>In</span><b>Lumi's reply + mood "happy"</b>
+          <span>Out</span><b><em>1.3 s of speech, made in 2.1 s</em></b>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <h2>How it works</h2>
+    <p class="sub">The phone stays across the room. The Pi on the desk does the rest.</p>
+    <ol class="how">
+      <li><b>A message arrives.</b> The phone's notification reaches the Pi over Wi-Fi through KDE Connect. Only messaging apps go further, and anything that looks like an OTP or password is dropped first.</li>
+      <li><b>Muse Spark sorts it.</b> Urgent now, or saved for the digest, with a short reason and a reply draft. Urgent messages light up the desk right away.</li>
+      <li><b>You hold the button and talk.</b> Muse Voice Transcribe turns your voice into text.</li>
+      <li><b>Lumi decides what to do.</b> Muse Spark answers or picks a tool: start focus, read missed messages, draft a reply, ring the phone, play focus sounds, set a reminder.</li>
+      <li><b>Lumi speaks.</b> MMS-TTS runs offline on the Pi, in the mood Muse Spark picked.</li>
+      <li><b>Replies need your yes.</b> Lumi reads the draft aloud and asks. Only a clear yes in your next turn sends it, from your phone's own quick reply.</li>
+    </ol>
+  </section>
+
+  <section id="safety">
+    <h2>Safety</h2>
+    <div class="cols">
+      <div class="box"><h3>Nothing is sent without your yes</h3>The check is in code (<code>pi/agent.py</code>), not left to the model: the draft must have been read out in the previous reply, your answer must contain a yes and no "no", and a draft is never sent in the turn it was written.</div>
+      <div class="box"><h3>Careful with your data</h3>Only messaging apps reach the model, OTP and password messages never do, auto-replies are marked as auto-replies, and the web console only listens on the Pi itself.</div>
+    </div>
+  </section>
+
+  <section id="built">
+    <h2>What we built this week</h2>
+    <p class="sub">All code was written during the hackathon (it started Oct 26; our first commit is Oct 30, 2026).</p>
+    <div class="cols">
+      <div class="box green"><h3>Built during the hackathon</h3><ul>
+        <li>Lumi, the agent on Muse Spark with tool calling</li>
+        <li>Notification sorting and reply drafts</li>
+        <li>The "yes" safety check, in code</li>
+        <li>Focus sessions, auto-replies, digest and focus score</li>
+        <li>The desk device: button, LEDs, OLED and Lumi's animated screens</li>
+        <li>Phone integration through KDE Connect</li>
+        <li>The QuietDesk window and the live Meta AI panel</li>
+      </ul></div>
+      <div class="box grey"><h3>Used, not built by us</h3><ul>
+        <li>Meta AI models: Muse Spark, Muse Voice Transcribe, MMS-TTS</li>
+        <li>Off-the-shelf hardware: Raspberry Pi 5, Waveshare 1.5" OLED, a button, LEDs, a breadboard</li>
+        <li>Open-source software: KDE Connect, PyTorch, transformers, Pillow, luma.oled, gpiozero and others (full list in the README)</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <footer>
+    QuietDesk by Nayanjyoti Das and Mintu Gogoi · <a href="https://github.com/n0y0nD/QuietDesk">github.com/n0y0nD/QuietDesk</a><br>
+    This page loads the demo video from Google Drive; it sets no cookies of its own.
+  </footer>
+</div>
+</body>
+</html>
