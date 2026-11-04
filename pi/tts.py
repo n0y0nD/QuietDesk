@@ -283,9 +283,10 @@ def chime() -> None:
 
 
 def warm_up() -> None:
-    """Load the model and run it once in the background, so the first real reply isn't slow."""
+    """Load the model and run it once in the background, so the first real reply isn't slow.
+    Not shown on the live Meta AI panel: it is a start-up step, not a reply."""
     if USE_MMS:
-        threading.Thread(target=lambda: wav_bytes("QuietDesk is ready."), daemon=True).start()
+        threading.Thread(target=lambda: b"".join(_mms_phrases("QuietDesk is ready.")), daemon=True).start()
 
 
 if __name__ == "__main__":
