@@ -4,6 +4,16 @@ A voice-first AI companion on a Raspberry Pi 5 that helps you keep your phone ou
 
 Built for the **Meta Global AI Developer Hackathon 2026**.
 
+<p align="center">
+  <img src="docs/quietdesk.jpg" width="720" alt="QuietDesk on a desk: the OLED shows Lumi's eyes, the time, the phone's battery and the weather, wired to a Raspberry Pi 5 with a button and two LEDs">
+</p>
+
+<p align="center">
+  <img src="docs/demo.gif" width="420" alt="Lumi on the desk screen: starting a focus session, an urgent message from Mom, a reply draft, the reply sent, ringing the phone, and the summary when focus ends">
+  <br>
+  <sub>Start a focus session, get an urgent message from Mom, reply by voice (sent only after a yes), find the phone, and hear what you missed.</sub>
+</p>
+
 ## What I built during the hackathon, and what I used
 
 All code in this repository was written during the hackathon (it started Oct 26; the first commit is Oct 30, 2026). Every AI model QuietDesk calls is a Meta model.
@@ -35,6 +45,30 @@ All code in this repository was written during the hackathon (it started Oct 26;
 - **Focus sounds.** "Play rain sounds": rain, ocean waves or brown noise from the desk speaker, made live in code (no audio files). It gets quieter while Lumi talks, goes silent while you talk, and stops when the focus session ends.
 - **Ask Lumi anything.** General questions get a short spoken answer, up to three sentences when you ask for an explanation. Lumi has no internet search, so it says so for live things like news or scores instead of guessing.
 - **Every Meta AI call, live.** The "Meta AI, live" panel in the QuietDesk window lists each Meta model call as it happens: which model, what it was for, how long it took and how many tokens it used.
+
+## How the parts connect
+
+```mermaid
+flowchart LR
+    phone["Android phone<br/>KDE Connect app"]
+    laptop["Laptop window<br/>mic and speaker"]
+    pi["Raspberry Pi 5<br/>QuietDesk (Python)"]
+    desk["Desk<br/>OLED, button, LEDs"]
+    stt["Muse Voice Transcribe<br/>Meta Model API"]
+    spark["Muse Spark 1.3<br/>Meta Model API"]
+    tts["MMS-TTS<br/>on the Pi, offline"]
+
+    phone -- "notifications" --> pi
+    pi -- "replies, ring, clear, music" --> phone
+    laptop -- "your voice" --> pi
+    pi -- "Lumi's voice" --> laptop
+    desk <--> pi
+    pi -- "audio" --> stt
+    pi -- "text and tools" --> spark
+    pi -- "reply text" --> tts
+```
+
+A message from the phone reaches the Pi over Wi-Fi through KDE Connect. Muse Spark marks it urgent or saves it for the digest, and drafts a reply. Urgent messages light up the desk right away. When you hold the button and talk, Muse Voice Transcribe turns your voice into text, Muse Spark picks the tools to run, and MMS-TTS speaks the answer.
 
 ## Meta AI models (every AI model call in QuietDesk)
 
